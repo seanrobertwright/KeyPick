@@ -1128,6 +1128,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
+ "winapi",
 ]
 
 [[package]]
@@ -1760,8 +1761,6 @@ dependencies = [
 [[package]]
 name = "robius-authentication"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28907f02c4dfd480f1dfff498f9f574fe71271f09f7e1e00fe527e20e72f5061"
 dependencies = [
  "android-build",
  "block2",

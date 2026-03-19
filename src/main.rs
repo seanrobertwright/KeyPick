@@ -70,6 +70,7 @@ fn main() {
             eprintln!("{} {}", "Authentication failed:".red().bold(), e);
             terminal::cleanup_and_exit(1);
         }
+        terminal::restore_console_focus();
         println!("{}", "✓ Identity verified.\n".green().bold());
     }
 

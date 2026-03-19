@@ -45,6 +45,12 @@ dirs = "5"
 # Temp files for safe downloads
 tempfile = "3"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["wincon", "winuser"] }
+
+[patch.crates-io]
+robius-authentication = { path = "vendor/robius-authentication" }
+
 [profile.release]
 opt-level = 3
 strip = true
