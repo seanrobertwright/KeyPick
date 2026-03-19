@@ -30,6 +30,18 @@ colored = "2"
 # Clipboard support
 arboard = "3"
 
+# TUI progress indicators (spinners, progress bars)
+indicatif = "0.17"
+
+# HTTP client for downloading binaries
+reqwest = { version = "0.12", features = ["blocking"] }
+
+# Cross-platform standard directories
+dirs = "5"
+
+# Temp files for safe downloads
+tempfile = "3"
+
 [profile.release]
 opt-level = 3
 strip = true
