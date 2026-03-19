@@ -106,6 +106,6 @@ fn run_full_wizard() {
     println!("\n{}", "Setup complete!".green().bold());
     println!(
         "  {}",
-        "Run `key-pick add` to store your first secrets.".dimmed()
+        "Run `keypick add` to store your first secrets.".dimmed()
     );
 }

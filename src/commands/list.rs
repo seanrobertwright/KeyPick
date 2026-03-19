@@ -7,7 +7,7 @@ pub fn run() {
     let vault = vault::load();
 
     if vault.services.is_empty() {
-        println!("{}", "  Vault is empty. Run `key-pick add` to add your first group.".yellow());
+        println!("{}", "  Vault is empty. Run `keypick add` to add your first group.".yellow());
         return;
     }
 

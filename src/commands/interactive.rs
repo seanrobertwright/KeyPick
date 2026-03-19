@@ -1,7 +1,7 @@
 use colored::*;
 use inquire::Select;
 
-/// Full interactive mode (no subcommand given — just run `key-pick`)
+/// Full interactive mode (no subcommand given — just run `keypick`)
 pub fn run() {
     let action = Select::new(
         "What would you like to do?",

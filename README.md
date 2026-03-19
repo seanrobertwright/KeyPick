@@ -30,11 +30,11 @@ KeyPick is a terminal-based secrets manager designed for developers who work acr
 - **Shell integration** via direnv for automatic environment variable injection
 
 ```
-key-pick setup    # One-command setup wizard
-key-pick add      # Store secrets in encrypted groups
-key-pick extract  # Export to .env files
-key-pick copy     # Copy a single key to clipboard
-key-pick auto     # Non-interactive export for direnv/CI
+keypick setup    # One-command setup wizard
+keypick add      # Store secrets in encrypted groups
+keypick extract  # Export to .env files
+keypick copy     # Copy a single key to clipboard
+keypick auto     # Non-interactive export for direnv/CI
 ```
 
 ---
@@ -84,7 +84,7 @@ graph TB
 
     d1 & d2 & laptop --> kp
 
-    subgraph kp["key-pick"]
+    subgraph kp["keypick"]
         direction LR
         bio["Biometric Gate<br/><i>Windows Hello / Touch ID / polkit</i>"]
         bio --> decrypt["SOPS Decrypt<br/><i>age private key</i>"]
@@ -138,7 +138,7 @@ graph TB
 2. **age encryption** controls who can decrypt it (each machine has a unique private key)
 3. **Biometric gate** (Windows Hello / Touch ID / polkit) protects every interactive decryption
 
-Secrets are only ever unencrypted in memory during a `key-pick` session. They are never written to disk in plaintext (except when you explicitly export a `.env` file).
+Secrets are only ever unencrypted in memory during a `keypick` session. They are never written to disk in plaintext (except when you explicitly export a `.env` file).
 
 ---
 
@@ -172,7 +172,7 @@ cd KeyPick
 cargo build --release
 
 # 2. Run the setup wizard
-./target/release/key-pick setup
+./target/release/keypick setup
 ```
 
 The wizard will:
@@ -203,13 +203,13 @@ cargo build --release
 
 # Add to PATH (choose one):
 # Option A: Copy to a directory already on PATH
-Copy-Item .\target\release\key-pick.exe "$env:USERPROFILE\.local\bin\"
+Copy-Item .\target\release\keypick.exe "$env:USERPROFILE\.local\bin\"
 
 # Option B: Copy next to other system tools
-Copy-Item .\target\release\key-pick.exe C:\Windows\System32\
+Copy-Item .\target\release\keypick.exe C:\Windows\System32\
 
 # Verify
-key-pick --version
+keypick --version
 ```
 
 ### macOS
@@ -224,12 +224,12 @@ cd KeyPick
 cargo build --release
 
 # Add to PATH
-cp target/release/key-pick ~/.local/bin/
+cp target/release/keypick ~/.local/bin/
 # or
-sudo cp target/release/key-pick /usr/local/bin/
+sudo cp target/release/keypick /usr/local/bin/
 
 # Verify
-key-pick --version
+keypick --version
 ```
 
 ### Linux
@@ -247,10 +247,10 @@ cd KeyPick
 cargo build --release
 
 # Add to PATH
-cp target/release/key-pick ~/.local/bin/
+cp target/release/keypick ~/.local/bin/
 
 # Verify
-key-pick --version
+keypick --version
 ```
 
 ### Manual Prerequisite Installation
@@ -269,7 +269,7 @@ If you prefer to install `age` and `sops` manually instead of letting the wizard
 ### First-Time Setup
 
 ```bash
-key-pick setup
+keypick setup
 ```
 
 The interactive wizard walks you through everything. On your first machine it will:
@@ -283,9 +283,9 @@ On additional machines, choose "Join existing vault" to clone your repo and regi
 ### Setup Subcommands
 
 ```bash
-key-pick setup           # Full wizard
-key-pick setup actions   # Just the GitHub Actions configuration
-key-pick setup recovery  # Just the recovery key generation
+keypick setup           # Full wizard
+keypick setup actions   # Just the GitHub Actions configuration
+keypick setup recovery  # Just the recovery key generation
 ```
 
 ---
@@ -293,7 +293,7 @@ key-pick setup recovery  # Just the recovery key generation
 ### Interactive Menu
 
 ```bash
-key-pick
+keypick
 ```
 
 When run without arguments, KeyPick shows a menu after biometric verification:
@@ -312,7 +312,7 @@ When run without arguments, KeyPick shows a menu after biometric verification:
 ### Add Secrets
 
 ```bash
-key-pick add
+keypick add
 ```
 
 Secrets are organized into **groups** (e.g., `Supabase_Prod`, `Google_AI`, `Stripe_Test`).
@@ -350,7 +350,7 @@ Secrets are organized into **groups** (e.g., `Supabase_Prod`, `Google_AI`, `Stri
 
 ```bash
 cd my-project
-key-pick extract
+keypick extract
 ```
 
 Select one or more groups to export:
@@ -382,7 +382,7 @@ STRIPE_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxx
 ### List Vault Contents
 
 ```bash
-key-pick list
+keypick list
 ```
 
 Shows all groups and key names with values hidden:
@@ -411,7 +411,7 @@ Vault Contents (values hidden):
 ### Copy to Clipboard
 
 ```bash
-key-pick copy
+keypick copy
 ```
 
 Select a group, then a key. The value is copied to your clipboard without ever being written to disk.
@@ -428,7 +428,7 @@ Select a group, then a key. The value is copied to your clipboard without ever b
 ### Automatic Shell Injection (direnv)
 
 ```bash
-key-pick auto Supabase_Prod Google_AI
+keypick auto Supabase_Prod Google_AI
 ```
 
 Outputs `export KEY='VALUE'` statements to stdout. Designed for use with [direnv](https://direnv.net/):
@@ -436,7 +436,7 @@ Outputs `export KEY='VALUE'` statements to stdout. Designed for use with [direnv
 **Create a `.envrc` in your project:**
 ```bash
 # my-project/.envrc
-eval $(key-pick auto Supabase_Prod Google_AI)
+eval $(keypick auto Supabase_Prod Google_AI)
 ```
 
 **Allow it once:**
@@ -446,7 +446,7 @@ direnv allow
 
 Now every time you `cd` into the project, your keys are automatically loaded as environment variables. When you `cd` out, they're removed.
 
-> **Note:** `key-pick auto` skips the biometric gate for non-interactive use. Your secrets are still protected by Git authentication and age encryption at rest.
+> **Note:** `keypick auto` skips the biometric gate for non-interactive use. Your secrets are still protected by Git authentication and age encryption at rest.
 
 **direnv installation:**
 ```bash
@@ -488,7 +488,7 @@ git push
 ```
 
 Adding a new machine is straightforward:
-1. Run `key-pick setup` and choose "Join existing vault"
+1. Run `keypick setup` and choose "Join existing vault"
 2. The wizard clones your repo, registers the machine's key, and pushes
 
 If you've set up GitHub Actions, the vault is automatically re-encrypted for the new recipient.
@@ -501,7 +501,7 @@ If you lose access to all your machines, a recovery key lets you restore access.
 
 **Create one during setup** (or run later):
 ```bash
-key-pick setup recovery
+keypick setup recovery
 ```
 
 The wizard:
@@ -524,7 +524,7 @@ Store the file and passphrase in **separate physical locations**. Both are requi
 age -d recovery_key.age > temp_key.txt
 
 # Use it to access the vault
-SOPS_AGE_KEY_FILE=temp_key.txt key-pick list
+SOPS_AGE_KEY_FILE=temp_key.txt keypick list
 
 # Delete the temp key immediately after
 rm temp_key.txt
@@ -536,15 +536,15 @@ rm temp_key.txt
 
 | Command | Description |
 |---------|-------------|
-| `key-pick` | Interactive menu (biometric required) |
-| `key-pick add` | Add or update keys in a group |
-| `key-pick extract` | Export groups to a `.env` file |
-| `key-pick list` | List all groups and key names (values hidden) |
-| `key-pick copy` | Copy a single key to clipboard |
-| `key-pick auto <groups...>` | Non-interactive export for direnv/shell eval |
-| `key-pick setup` | Full setup wizard |
-| `key-pick setup actions` | Configure GitHub Actions auto-sync |
-| `key-pick setup recovery` | Generate a recovery key |
+| `keypick` | Interactive menu (biometric required) |
+| `keypick add` | Add or update keys in a group |
+| `keypick extract` | Export groups to a `.env` file |
+| `keypick list` | List all groups and key names (values hidden) |
+| `keypick copy` | Copy a single key to clipboard |
+| `keypick auto <groups...>` | Non-interactive export for direnv/shell eval |
+| `keypick setup` | Full setup wizard |
+| `keypick setup actions` | Configure GitHub Actions auto-sync |
+| `keypick setup recovery` | Generate a recovery key |
 
 ---
 
@@ -563,11 +563,11 @@ KeyPick/
     ├── vault.rs                        # SOPS encrypt/decrypt, data model
     └── commands/
         ├── mod.rs
-        ├── add.rs                      # key-pick add
-        ├── extract.rs                  # key-pick extract
-        ├── list.rs                     # key-pick list
-        ├── copy.rs                     # key-pick copy
-        ├── auto_export.rs              # key-pick auto
+        ├── add.rs                      # keypick add
+        ├── extract.rs                  # keypick extract
+        ├── list.rs                     # keypick list
+        ├── copy.rs                     # keypick copy
+        ├── auto_export.rs              # keypick auto
         ├── interactive.rs              # No-argument menu mode
         └── setup/
             ├── mod.rs                  # Setup wizard orchestrator
@@ -586,7 +586,7 @@ KeyPick/
 
 ### `sops` or `age` not found after setup
 
-The setup wizard installs binaries to `~/.local/bin/` or next to `key-pick.exe`. If your shell can't find them:
+The setup wizard installs binaries to `~/.local/bin/` or next to `keypick.exe`. If your shell can't find them:
 
 ```bash
 # Check where they were installed
@@ -608,7 +608,7 @@ SOPS decryption failed: ...
 
 This means your machine's age private key can't decrypt the vault. Common causes:
 
-- **Wrong directory:** Make sure you're running `key-pick` from inside your vault repo (where `vault.yaml` lives)
+- **Wrong directory:** Make sure you're running `keypick` from inside your vault repo (where `vault.yaml` lives)
 - **Missing key file:** Verify your age key exists:
   ```bash
   # Windows
@@ -617,7 +617,7 @@ This means your machine's age private key can't decrypt the vault. Common causes
   # macOS/Linux
   cat ~/.config/sops/age/keys.txt
   ```
-- **Machine not registered:** Your public key might not be in `.sops.yaml`. Run `key-pick setup` and choose "Join existing vault"
+- **Machine not registered:** Your public key might not be in `.sops.yaml`. Run `keypick setup` and choose "Join existing vault"
 
 ### Authentication failed
 
@@ -630,14 +630,14 @@ The biometric prompt was cancelled or failed. Possible causes:
 - **Windows Hello not configured:** Set up a PIN/fingerprint in Settings > Accounts > Sign-in options
 - **Touch ID not enabled:** Enable in System Preferences > Touch ID
 - **Linux polkit missing:** Install `policykit-1` or your distro's equivalent
-- **Remote/SSH session:** Biometrics require a local display. Use `key-pick auto` for non-interactive access
+- **Remote/SSH session:** Biometrics require a local display. Use `keypick auto` for non-interactive access
 
 ### GitHub Actions workflow not triggering
 
 - Verify the `SOPS_AGE_KEY` secret is set in your repo's Settings > Secrets > Actions
 - Check that `.github/workflows/vault-sync.yml` exists in your secrets repo
 - The workflow only triggers on pushes to `.sops.yaml` or `vault.yaml`
-- Run `key-pick setup actions` to reconfigure
+- Run `keypick setup actions` to reconfigure
 
 ### `gh` CLI not authenticated
 
@@ -653,7 +653,7 @@ gh auth status  # Verify
 You need to register this machine's key first. The vault is encrypted for specific recipients:
 
 ```bash
-key-pick setup  # Choose "Join existing vault"
+keypick setup  # Choose "Join existing vault"
 ```
 
 ---

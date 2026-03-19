@@ -10,7 +10,7 @@ pub fn run() {
     let vault = vault::load();
 
     if vault.services.is_empty() {
-        println!("{}", "  No groups found in vault. Run `key-pick add` first.".yellow());
+        println!("{}", "  No groups found in vault. Run `keypick add` first.".yellow());
         return;
     }
 

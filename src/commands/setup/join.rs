@@ -94,7 +94,7 @@ pub fn run(public_key: &str) -> Result<(), String> {
     );
     println!(
         "  {}",
-        "You can now use `key-pick` commands from this directory.".dimmed()
+        "You can now use `keypick` commands from this directory.".dimmed()
     );
 
     Ok(())

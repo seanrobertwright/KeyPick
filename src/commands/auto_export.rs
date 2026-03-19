@@ -6,10 +6,10 @@ use crate::vault;
 /// No biometric gate — authentication is handled by the calling shell context.
 ///
 /// Usage in .envrc:
-///   eval $(key-pick auto Supabase_Prod Google_AI)
+///   eval $(keypick auto Supabase_Prod Google_AI)
 pub fn run(groups: &[String]) {
     if groups.is_empty() {
-        eprintln!("Usage: key-pick auto <Group1> [Group2 ...]");
+        eprintln!("Usage: keypick auto <Group1> [Group2 ...]");
         std::process::exit(1);
     }
 

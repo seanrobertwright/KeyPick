@@ -1,12 +1,12 @@
 [package]
-name = "key-pick"
+name = "keypick"
 version = "0.1.0"
 edition = "2021"
 description = "Cross-platform, biometric-secured API key vault manager powered by SOPS + age"
 authors = ["You"]
 
 [[bin]]
-name = "key-pick"
+name = "keypick"
 path = "src/main.rs"
 
 [dependencies]

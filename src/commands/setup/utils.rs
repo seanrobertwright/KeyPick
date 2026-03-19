@@ -148,7 +148,7 @@ pub fn install_dir() -> PathBuf {
         }
     }
 
-    // Try next to key-pick's own executable
+    // Try next to keypick's own executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             return dir.to_path_buf();

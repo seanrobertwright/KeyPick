@@ -108,7 +108,7 @@ git push -u origin main
 
 ---
 
-## Phase 3: Deploy key-pick
+## Phase 3: Deploy keypick
 
 ### 8. Build the binary (if not already done)
 
@@ -120,12 +120,12 @@ cargo build --release
 ### 9. Put it on your PATH
 
 ```powershell
-Copy-Item .\target\release\key-pick.exe C:\Windows\System32\
+Copy-Item .\target\release\keypick.exe C:\Windows\System32\
 ```
 
 Verify:
 ```powershell
-key-pick --version
+keypick --version
 ```
 
 ### 10. Clone the secrets repo on your other machines
@@ -135,17 +135,17 @@ On Desktop 2 and your Laptop:
 git clone git@github.com:YOUR_USERNAME/my-keys.git
 ```
 
-Then copy `key-pick.exe` to each machine (via Google Drive, USB, or build from source on each).
+Then copy `keypick.exe` to each machine (via Google Drive, USB, or build from source on each).
 
 ---
 
 ## Phase 4: Add Your First Keys
 
-### 11. Navigate to your secrets repo and run key-pick
+### 11. Navigate to your secrets repo and run keypick
 
 ```powershell
 cd my-keys
-key-pick add
+keypick add
 ```
 
 Follow the wizard:
@@ -169,7 +169,7 @@ git push
 ```powershell
 cd my-keys
 git pull
-key-pick list   # Verify the keys are there
+keypick list   # Verify the keys are there
 ```
 
 ---
@@ -277,7 +277,7 @@ Invoke-Expression "$(direnv hook pwsh)"
 
 ```bash
 # my-project/.envrc
-eval $(key-pick auto Supabase_Prod Google_AI)
+eval $(keypick auto Supabase_Prod Google_AI)
 ```
 
 Then authorize it once:
@@ -293,10 +293,10 @@ Now every `cd` into that project auto-injects the keys. Every `cd` out removes t
 
 | Task | Command |
 |------|---------|
-| Interactive menu | `key-pick` |
-| Add keys to a group | `key-pick add` |
-| Extract groups to .env | `key-pick extract` |
-| List groups (values hidden) | `key-pick list` |
-| Copy one key to clipboard | `key-pick copy` |
-| direnv auto-export | `key-pick auto Group1 Group2` |
+| Interactive menu | `keypick` |
+| Add keys to a group | `keypick add` |
+| Extract groups to .env | `keypick extract` |
+| List groups (values hidden) | `keypick list` |
+| Copy one key to clipboard | `keypick copy` |
+| direnv auto-export | `keypick auto Group1 Group2` |
 | Sync to other machines | `git pull` / `git push` |

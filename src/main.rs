@@ -7,7 +7,7 @@ use colored::*;
 
 /// KeyPick — Cross-platform API key vault manager
 #[derive(Parser)]
-#[command(name = "key-pick")]
+#[command(name = "keypick")]
 #[command(version = "0.1.0")]
 #[command(about = "Secure, grouped API key manager powered by SOPS + age", long_about = None)]
 struct Cli {
@@ -32,7 +32,7 @@ enum Commands {
     /// Non-interactive export for use with direnv .envrc files
     ///
     /// Example .envrc line:
-    ///   eval $(key-pick auto Supabase_Prod Google_AI)
+    ///   eval $(keypick auto Supabase_Prod Google_AI)
     Auto {
         /// Names of the service groups to export
         groups: Vec<String>,
