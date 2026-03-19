@@ -10,7 +10,7 @@ use crate::vault;
 pub fn run(groups: &[String]) {
     if groups.is_empty() {
         eprintln!("Usage: keypick auto <Group1> [Group2 ...]");
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     }
 
     let vault = vault::load();

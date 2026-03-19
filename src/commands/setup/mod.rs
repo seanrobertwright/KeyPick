@@ -76,7 +76,7 @@ fn run_full_wizard(walkthrough: bool) {
     }
     if let Err(e) = prerequisites::run(walkthrough) {
         eprintln!("{} {}", "Setup failed:".red().bold(), e);
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     }
 
     // Phase 2: Age key
@@ -102,7 +102,7 @@ fn run_full_wizard(walkthrough: bool) {
         Ok(key) => key,
         Err(e) => {
             eprintln!("{} {}", "Key generation failed:".red().bold(), e);
-            std::process::exit(1);
+            crate::terminal::cleanup_and_exit(1);
         }
     };
 
@@ -139,13 +139,13 @@ fn run_full_wizard(walkthrough: bool) {
         Ok(c) if c.starts_with("New") => {
             if let Err(e) = init::run(&public_key, walkthrough) {
                 eprintln!("{} {}", "Init failed:".red().bold(), e);
-                std::process::exit(1);
+                crate::terminal::cleanup_and_exit(1);
             }
         }
         Ok(_) => {
             if let Err(e) = join::run(&public_key, walkthrough) {
                 eprintln!("{} {}", "Join failed:".red().bold(), e);
-                std::process::exit(1);
+                crate::terminal::cleanup_and_exit(1);
             }
         }
         Err(_) => {

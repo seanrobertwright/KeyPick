@@ -18,6 +18,9 @@ serde_json = "1.0"
 # Interactive CLI prompts
 inquire = "0.7"
 
+# Terminal state management (restore raw mode on unexpected exit)
+crossterm = "0.25"
+
 # Cross-platform biometric auth (Windows Hello / TouchID / polkit)
 robius-authentication = "0.1"
 

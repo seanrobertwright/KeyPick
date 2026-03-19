@@ -1,6 +1,7 @@
 mod vault;
 mod auth;
 mod commands;
+mod terminal;
 
 use clap::{Parser, Subcommand};
 use colored::*;
@@ -50,6 +51,7 @@ enum Commands {
 }
 
 fn main() {
+    terminal::install_panic_hook();
     print_banner();
 
     let cli = Cli::parse();
@@ -66,7 +68,7 @@ fn main() {
     if needs_bio {
         if let Err(e) = auth::verify() {
             eprintln!("{} {}", "Authentication failed:".red().bold(), e);
-            std::process::exit(1);
+            terminal::cleanup_and_exit(1);
         }
         println!("{}", "✓ Identity verified.\n".green().bold());
     }

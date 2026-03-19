@@ -17,7 +17,7 @@ pub fn run() {
     let groups: Vec<String> = vault.services.keys().cloned().collect();
     let group = Select::new("Select group:", groups)
         .prompt()
-        .unwrap_or_else(|_| std::process::exit(0));
+        .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0));
 
     let keys_map = vault.services.get(&group).unwrap();
 
@@ -25,19 +25,19 @@ pub fn run() {
     let key_names: Vec<String> = keys_map.keys().cloned().collect();
     let key = Select::new("Select key to copy:", key_names)
         .prompt()
-        .unwrap_or_else(|_| std::process::exit(0));
+        .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0));
 
     let value = keys_map.get(&key).unwrap();
 
     // Step 3: copy to clipboard
     let mut clipboard = Clipboard::new().unwrap_or_else(|e| {
         eprintln!("Clipboard error: {}", e);
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     });
 
     clipboard.set_text(value).unwrap_or_else(|e| {
         eprintln!("Failed to set clipboard: {}", e);
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     });
 
     println!(

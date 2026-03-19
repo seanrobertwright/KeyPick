@@ -32,7 +32,7 @@ pub fn load() -> Vault {
                 "ERROR: Could not run `sops`. Make sure sops.exe is in your PATH.\n\
                  Download: https://github.com/getsops/sops/releases"
             );
-            std::process::exit(1);
+            crate::terminal::cleanup_and_exit(1);
         });
 
     if !output.status.success() {
@@ -43,7 +43,7 @@ pub fn load() -> Vault {
              Windows: %AppData%\\sops\\age\\keys.txt\n  \
              macOS/Linux: ~/.config/sops/age/keys.txt"
         );
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     }
 
     serde_yaml::from_slice(&output.stdout).unwrap_or_default()
@@ -69,7 +69,7 @@ pub fn save(vault: &Vault) {
         .spawn()
         .unwrap_or_else(|_| {
             eprintln!("ERROR: Could not spawn sops for encryption.");
-            std::process::exit(1);
+            crate::terminal::cleanup_and_exit(1);
         });
 
     {
@@ -86,7 +86,7 @@ pub fn save(vault: &Vault) {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         eprintln!("SOPS encryption failed:\n{}", stderr);
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     }
 
     std::fs::write(VAULT_FILE, &output.stdout).expect("Failed to write vault.yaml");

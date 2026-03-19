@@ -22,12 +22,12 @@ pub fn run() {
         options,
     )
     .prompt()
-    .unwrap_or_else(|_| std::process::exit(0));
+    .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0));
 
     let group_name = if group_choice == "[ + New Group ]" {
         Text::new("Service/Group name (e.g. Supabase_Prod, Google_AI):")
             .prompt()
-            .unwrap_or_else(|_| std::process::exit(0))
+            .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0))
     } else {
         group_choice
     };
@@ -45,7 +45,7 @@ pub fn run() {
     loop {
         let key = Text::new("Key Name  :")
             .prompt()
-            .unwrap_or_else(|_| std::process::exit(0));
+            .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0));
 
         if key.trim().is_empty() {
             break;
@@ -53,7 +53,7 @@ pub fn run() {
 
         let val = Text::new(&format!("Value for {}:", key.cyan().bold().to_string()))
             .prompt()
-            .unwrap_or_else(|_| std::process::exit(0));
+            .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0));
 
         let is_update = entry.contains_key(&key);
         entry.insert(key.clone(), val);

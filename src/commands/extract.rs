@@ -21,7 +21,7 @@ pub fn run() {
         options,
     )
     .prompt()
-    .unwrap_or_else(|_| std::process::exit(0));
+    .unwrap_or_else(|_| crate::terminal::cleanup_and_exit(0));
 
     if selected.is_empty() {
         println!("{}", "  Nothing selected. Aborted.".yellow());
@@ -42,7 +42,7 @@ pub fn run() {
 
     std::fs::write(ENV_FILE, &env_content).unwrap_or_else(|e| {
         eprintln!("Failed to write .env: {}", e);
-        std::process::exit(1);
+        crate::terminal::cleanup_and_exit(1);
     });
 
     println!(

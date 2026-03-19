@@ -1118,6 +1118,7 @@ dependencies = [
  "arboard",
  "clap",
  "colored",
+ "crossterm",
  "dirs",
  "indicatif",
  "inquire",
