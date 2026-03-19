@@ -1,0 +1,87 @@
+mod vault;
+mod auth;
+mod commands;
+
+use clap::{Parser, Subcommand};
+use colored::*;
+
+/// KeyPick — Cross-platform API key vault manager
+#[derive(Parser)]
+#[command(name = "key-pick")]
+#[command(version = "0.1.0")]
+#[command(about = "Secure, grouped API key manager powered by SOPS + age", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Add or update keys in a named service group
+    Add,
+
+    /// Extract keys from one or more groups into a .env file
+    Extract,
+
+    /// List all stored service groups and their key names (values hidden)
+    List,
+
+    /// Copy a specific key value to the clipboard (never written to disk)
+    Copy,
+
+    /// Non-interactive export for use with direnv .envrc files
+    ///
+    /// Example .envrc line:
+    ///   eval $(key-pick auto Supabase_Prod Google_AI)
+    Auto {
+        /// Names of the service groups to export
+        groups: Vec<String>,
+    },
+}
+
+fn main() {
+    print_banner();
+
+    let cli = Cli::parse();
+
+    // The `auto` subcommand is non-interactive (used by direnv) — no biometric gate
+    let needs_bio = !matches!(&cli.command, Some(Commands::Auto { .. }));
+
+    if needs_bio {
+        if let Err(e) = auth::verify() {
+            eprintln!("{} {}", "Authentication failed:".red().bold(), e);
+            std::process::exit(1);
+        }
+        println!("{}", "✓ Identity verified.\n".green().bold());
+    }
+
+    match cli.command {
+        Some(Commands::Add) => commands::add::run(),
+        Some(Commands::Extract) => commands::extract::run(),
+        Some(Commands::List) => commands::list::run(),
+        Some(Commands::Copy) => commands::copy::run(),
+        Some(Commands::Auto { groups }) => commands::auto_export::run(&groups),
+        None => commands::interactive::run(),
+    }
+}
+
+fn print_banner() {
+    println!(
+        "{}",
+        r#"
+  ██╗  ██╗███████╗██╗   ██╗    ██████╗ ██╗ ██████╗██╗  ██╗
+  ██║ ██╔╝██╔════╝╚██╗ ██╔╝    ██╔══██╗██║██╔════╝██║ ██╔╝
+  █████╔╝ █████╗   ╚████╔╝     ██████╔╝██║██║     █████╔╝
+  ██╔═██╗ ██╔══╝    ╚██╔╝      ██╔═══╝ ██║██║     ██╔═██╗
+  ██║  ██╗███████╗   ██║       ██║     ██║╚██████╗██║  ██╗
+  ╚═╝  ╚═╝╚══════╝   ╚═╝       ╚═╝     ╚═╝ ╚═════╝╚═╝  ╚═╝
+"#
+        .cyan()
+        .bold()
+    );
+    println!(
+        "  {} {}\n",
+        "KeyPick".cyan().bold(),
+        "— Secure Cross-Platform API Key Vault".dimmed()
+    );
+}

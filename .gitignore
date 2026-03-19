@@ -1,0 +1,23 @@
+# Build artifacts
+/target/
+
+# Generated .env files (NEVER commit these)
+.env
+.env.local
+*.env
+
+# SOPS decryption key files (NEVER commit these)
+keys.txt
+recovery_key_plaintext.txt
+*.age.plaintext
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/settings.json
+.idea/

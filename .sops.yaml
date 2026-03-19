@@ -1,0 +1,23 @@
+# .sops.yaml
+#
+# This file lives in the ROOT of your SECRETS git repo (not inside key-pick/ itself).
+# It defines which age public keys are authorized to decrypt vault.yaml.
+#
+# HOW TO GET YOUR PUBLIC KEY:
+#   Windows: age-keygen -o %AppData%\sops\age\keys.txt
+#   macOS:   age-keygen -o ~/.config/sops/age/keys.txt
+#   Linux:   age-keygen -o ~/.config/sops/age/keys.txt
+#
+# The public key is printed during keygen and starts with "age1..."
+#
+# AFTER EDITING this file, run:
+#   sops updatekeys -y vault.yaml
+# OR just push — the GitHub Action will do it for you automatically.
+
+creation_rules:
+  - path_regex: vault\.yaml$
+    age: >-
+      age1REPLACE_WITH_DESKTOP1_PUBLIC_KEY,
+      age1REPLACE_WITH_DESKTOP2_PUBLIC_KEY,
+      age1REPLACE_WITH_LAPTOP_PUBLIC_KEY,
+      age1REPLACE_WITH_GITHUB_ACTIONS_PUBLIC_KEY
