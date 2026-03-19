@@ -21,3 +21,6 @@ Desktop.ini
 # Editor
 .vscode/settings.json
 .idea/
+
+# Worktrees
+.worktrees/
