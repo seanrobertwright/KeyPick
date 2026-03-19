@@ -1,169 +1,303 @@
-# KeyPick 🔑
+<p align="center">
+  <img src="KeyPick.jpg" alt="KeyPick - In-House Secure API Key Manager" width="800"/>
+</p>
 
-> A cross-platform, biometric-secured CLI for managing reusable API keys across multiple machines.
-> Built on **SOPS + age encryption** with a **private Git repo** as the sync backbone.
+<h1 align="center">KeyPick</h1>
 
----
+<p align="center">
+  <strong>A cross-platform, biometric-secured CLI for managing reusable API keys across multiple machines.</strong><br>
+  Built on <strong>SOPS + age encryption</strong> with a <strong>private Git repo</strong> as the sync backbone.
+</p>
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Private Git Repository                     │
-│                                                              │
-│   vault.yaml  (SOPS-encrypted, safe to commit)              │
-│   .sops.yaml  (recipient list — public keys only)           │
-│   .github/workflows/vault-sync.yml  (auto re-encrypt CI)   │
-└──────────────────────────┬───────────────────────────────────┘
-                           │  git pull / push
-          ┌────────────────┼────────────────┐
-          │                │                │
-    Desktop 1        Desktop 2          Laptop
-    age key #1       age key #2        age key #3
-          │                │                │
-          └────────────────┼────────────────┘
-                           │
-                    key-pick binary
-                    (biometric gate → sops decrypt → interactive menu)
-```
-
-**Security layers:**
-1. **GitHub auth** — who can `git pull` the encrypted file
-2. **age encryption** — who can decrypt the file (each machine has its own private key)
-3. **Biometric gate** — Windows Hello / Touch ID before any decryption happens
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#usage">Usage</a> &bull;
+  <a href="#how-it-works">How It Works</a> &bull;
+  <a href="#troubleshooting">Troubleshooting</a> &bull;
+  <a href="#contributing">Contributing</a>
+</p>
 
 ---
 
-## Prerequisites
+## Overview
 
-Install the following tools on **every machine**:
+KeyPick is a terminal-based secrets manager designed for developers who work across multiple machines. Instead of copying `.env` files around, texting yourself API keys, or storing them in plaintext notes, KeyPick gives you:
+
+- **One encrypted vault** synced via a private Git repo
+- **Biometric authentication** (Windows Hello, Touch ID, Linux polkit) before any secret is decrypted
+- **Per-machine age keys** so compromising one machine doesn't compromise them all
+- **A guided setup wizard** that installs prerequisites, generates keys, and configures everything for you
+- **Shell integration** via direnv for automatic environment variable injection
+
+```
+key-pick setup    # One-command setup wizard
+key-pick add      # Store secrets in encrypted groups
+key-pick extract  # Export to .env files
+key-pick copy     # Copy a single key to clipboard
+key-pick auto     # Non-interactive export for direnv/CI
+```
+
+---
+
+## Why KeyPick?
+
+**The problem:** Every developer accumulates API keys, database credentials, and service tokens across projects. The common "solutions" are all terrible:
+
+| Approach | Why It Fails |
+|----------|-------------|
+| `.env` files on each machine | Out of sync, easy to accidentally commit |
+| Cloud password managers | Not designed for developer workflows, no CLI integration |
+| Environment variables in shell profiles | Plaintext, no grouping, no sync |
+| Shared team vaults (1Password, etc.) | Overkill for personal keys, subscription cost |
+| Copy-pasting from Slack/email | Insecure, no audit trail, keys get lost |
+
+**KeyPick's approach:** Encrypt everything with [age](https://github.com/FiloSottile/age), store it in a private Git repo you control, and gate decryption behind your fingerprint. Each machine gets its own encryption key. Syncing is just `git pull`.
+
+---
+
+## How It Works
+
+```mermaid
+graph TB
+    subgraph repo["Private Git Repository"]
+        vault["vault.yaml<br/><i>SOPS-encrypted</i>"]
+        sops_cfg[".sops.yaml<br/><i>public keys only</i>"]
+        ci[".github/workflows/vault-sync.yml<br/><i>auto re-encrypt CI</i>"]
+    end
+
+    repo <-->|"git pull / push"| d1
+    repo <-->|"git pull / push"| d2
+    repo <-->|"git pull / push"| laptop
+
+    subgraph machines["Your Machines"]
+        direction LR
+        subgraph d1["Desktop 1"]
+            k1["age key #1"]
+        end
+        subgraph d2["Desktop 2"]
+            k2["age key #2"]
+        end
+        subgraph laptop["Laptop"]
+            k3["age key #3"]
+        end
+    end
+
+    d1 & d2 & laptop --> kp
+
+    subgraph kp["key-pick"]
+        direction LR
+        bio["Biometric Gate<br/><i>Windows Hello / Touch ID / polkit</i>"]
+        bio --> decrypt["SOPS Decrypt<br/><i>age private key</i>"]
+        decrypt --> menu["Interactive Menu<br/><i>add / extract / list / copy</i>"]
+    end
+
+    subgraph outputs["Outputs"]
+        direction LR
+        env[".env file"]
+        clip["Clipboard"]
+        shell["Shell exports<br/><i>direnv auto-inject</i>"]
+    end
+
+    menu --> env & clip & shell
+
+    subgraph security["Security Layers"]
+        direction LR
+        s1["1. GitHub Auth<br/><i>repo access control</i>"]
+        s2["2. age Encryption<br/><i>per-machine keys</i>"]
+        s3["3. Biometric Gate<br/><i>fingerprint / face</i>"]
+    end
+
+    style repo fill:#1a1a2e,stroke:#00d4ff,stroke-width:2px,color:#fff
+    style vault fill:#0d7377,stroke:#14ffec,color:#fff
+    style sops_cfg fill:#0d7377,stroke:#14ffec,color:#fff
+    style ci fill:#0d7377,stroke:#14ffec,color:#fff
+    style machines fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#fff
+    style d1 fill:#16213e,stroke:#e94560,color:#fff
+    style d2 fill:#16213e,stroke:#e94560,color:#fff
+    style laptop fill:#16213e,stroke:#e94560,color:#fff
+    style k1 fill:#533483,stroke:#e94560,color:#fff
+    style k2 fill:#533483,stroke:#e94560,color:#fff
+    style k3 fill:#533483,stroke:#e94560,color:#fff
+    style kp fill:#1a1a2e,stroke:#0f3460,stroke-width:2px,color:#fff
+    style bio fill:#e94560,stroke:#e94560,color:#fff
+    style decrypt fill:#0d7377,stroke:#14ffec,color:#fff
+    style menu fill:#533483,stroke:#9b59b6,color:#fff
+    style outputs fill:#1a1a2e,stroke:#00d4ff,stroke-width:2px,color:#fff
+    style env fill:#16213e,stroke:#14ffec,color:#fff
+    style clip fill:#16213e,stroke:#14ffec,color:#fff
+    style shell fill:#16213e,stroke:#14ffec,color:#fff
+    style security fill:#0f3460,stroke:#00d4ff,stroke-width:2px,color:#fff
+    style s1 fill:#e94560,stroke:#e94560,color:#fff
+    style s2 fill:#0d7377,stroke:#14ffec,color:#fff
+    style s3 fill:#533483,stroke:#9b59b6,color:#fff
+```
+
+**Three layers of security:**
+
+1. **GitHub authentication** controls who can access the encrypted file
+2. **age encryption** controls who can decrypt it (each machine has a unique private key)
+3. **Biometric gate** (Windows Hello / Touch ID / polkit) protects every interactive decryption
+
+Secrets are only ever unencrypted in memory during a `key-pick` session. They are never written to disk in plaintext (except when you explicitly export a `.env` file).
+
+---
+
+## Tech Stack
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Language** | Rust | Performance, safety, cross-platform binaries |
+| **Encryption** | [age](https://github.com/FiloSottile/age) | Modern, audited, no-config file encryption |
+| **Secret management** | [SOPS](https://github.com/getsops/sops) | Encrypted file editing with multiple recipients |
+| **Biometrics** | [robius-authentication](https://crates.io/crates/robius-authentication) | Windows Hello, Touch ID, Linux polkit |
+| **CLI framework** | [clap](https://crates.io/crates/clap) | Argument parsing with derive macros |
+| **Interactive prompts** | [inquire](https://crates.io/crates/inquire) | Select menus, text input, confirmations |
+| **Progress indicators** | [indicatif](https://crates.io/crates/indicatif) | Download progress bars, operation spinners |
+| **HTTP downloads** | [reqwest](https://crates.io/crates/reqwest) | Auto-download prerequisites from GitHub |
+| **Sync backbone** | Git + GitHub | Encrypted vault synced across machines |
+| **CI automation** | GitHub Actions | Auto re-encryption when recipients change |
+
+---
+
+## Quick Start
+
+The fastest way to get running is the setup wizard. It handles everything.
+
+### Automated Setup (Recommended)
+
+```bash
+# 1. Clone and build KeyPick
+git clone https://github.com/YOUR_USERNAME/KeyPick.git
+cd KeyPick
+cargo build --release
+
+# 2. Run the setup wizard
+./target/release/key-pick setup
+```
+
+The wizard will:
+- Check for `age` and `sops`, downloading them automatically if missing
+- Generate (or detect) your machine's age encryption key
+- Ask whether this is your first machine or you're joining an existing vault
+- Create or clone your encrypted vault repository
+- Optionally configure GitHub Actions auto-sync and a recovery key
+
+---
+
+## Installation
+
+### Prerequisites
+
+You need **Rust** (for building) and **Git** (for syncing). The setup wizard handles `age` and `sops` for you, but you can also install them manually.
+
+### Windows
+
+```powershell
+# Install Rust (if not already installed)
+winget install Rustlang.Rustup
+
+# Clone and build
+git clone https://github.com/YOUR_USERNAME/KeyPick.git
+cd KeyPick
+cargo build --release
+
+# Add to PATH (choose one):
+# Option A: Copy to a directory already on PATH
+Copy-Item .\target\release\key-pick.exe "$env:USERPROFILE\.local\bin\"
+
+# Option B: Copy next to other system tools
+Copy-Item .\target\release\key-pick.exe C:\Windows\System32\
+
+# Verify
+key-pick --version
+```
+
+### macOS
+
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Clone and build
+git clone https://github.com/YOUR_USERNAME/KeyPick.git
+cd KeyPick
+cargo build --release
+
+# Add to PATH
+cp target/release/key-pick ~/.local/bin/
+# or
+sudo cp target/release/key-pick /usr/local/bin/
+
+# Verify
+key-pick --version
+```
+
+### Linux
+
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install build dependencies (Debian/Ubuntu)
+sudo apt install -y build-essential pkg-config libdbus-1-dev
+
+# Clone and build
+git clone https://github.com/YOUR_USERNAME/KeyPick.git
+cd KeyPick
+cargo build --release
+
+# Add to PATH
+cp target/release/key-pick ~/.local/bin/
+
+# Verify
+key-pick --version
+```
+
+### Manual Prerequisite Installation
+
+If you prefer to install `age` and `sops` manually instead of letting the wizard do it:
 
 | Tool | Windows | macOS | Linux |
 |------|---------|-------|-------|
 | **age** | [Download .zip](https://github.com/FiloSottile/age/releases) | `brew install age` | `apt install age` |
 | **sops** | [Download .exe](https://github.com/getsops/sops/releases) | `brew install sops` | `apt install sops` |
-| **Rust** | [rustup.rs](https://rustup.rs) | `brew install rust` | `curl https://sh.rustup.rs | sh` |
-| **Git** | [git-scm.com](https://git-scm.com) | built-in | `apt install git` |
-| **direnv** *(optional)* | `winget install direnv` | `brew install direnv` | `apt install direnv` |
-
-> **Windows PATH tip:** After downloading `age.exe` and `sops.exe`, move them to `C:\Windows\System32\`
-> or add their folder to your `PATH` in System Environment Variables.
 
 ---
 
-## One-Time Setup (Do This Once Per Machine)
+## Usage
 
-### Step 1 — Generate your machine's age key
+### First-Time Setup
 
-```powershell
-# Windows
-age-keygen -o "$env:APPDATA\sops\age\keys.txt"
-
-# macOS / Linux
-age-keygen -o ~/.config/sops/age/keys.txt
+```bash
+key-pick setup
 ```
 
-**The output will look like:**
-```
-Public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
-```
+The interactive wizard walks you through everything. On your first machine it will:
+1. Install `age` and `sops` (if missing)
+2. Generate your machine's age encryption key
+3. Create a private vault repository
+4. Optionally set up GitHub Actions and a recovery key
 
-📋 **Copy and save that public key line** — you'll need it in Step 3.
+On additional machines, choose "Join existing vault" to clone your repo and register the new machine's key.
 
----
+### Setup Subcommands
 
-### Step 2 — Create your private secrets repository
-
-1. Go to GitHub and create a **private** repository named `my-keys` (or any name you like).
-2. Clone it locally:
-
-```powershell
-git clone git@github.com:YOUR_USERNAME/my-keys.git
-cd my-keys
+```bash
+key-pick setup           # Full wizard
+key-pick setup actions   # Just the GitHub Actions configuration
+key-pick setup recovery  # Just the recovery key generation
 ```
 
 ---
 
-### Step 3 — Configure SOPS with your machine keys
+### Interactive Menu
 
-Copy `.sops.yaml` from this repo into your `my-keys` folder, then edit it:
-
-```yaml
-# my-keys/.sops.yaml
-creation_rules:
-  - path_regex: vault\.yaml$
-    age: >-
-      age1DESKTOP1_PUBLIC_KEY,
-      age1DESKTOP2_PUBLIC_KEY,
-      age1LAPTOP_PUBLIC_KEY,
-      age1GITHUB_ACTIONS_PUBLIC_KEY
-```
-
-Replace the placeholders with the public keys from each machine (Step 1).
-
----
-
-### Step 4 — Create and encrypt the initial vault
-
-```powershell
-cd my-keys
-
-# Create an empty vault
-echo "services: {}" > vault.yaml
-
-# Encrypt it in-place
-sops -e -i vault.yaml
-
-# Commit and push
-git add vault.yaml .sops.yaml
-git commit -m "feat: initialize encrypted vault"
-git push
-```
-
-If you `cat vault.yaml` now, it should look like gibberish — that's correct.
-
----
-
-### Step 5 — Generate a GitHub Actions age key (for auto re-encrypt CI)
-
-```powershell
-age-keygen -o github_key.txt
-```
-
-1. Add the **public key** from `github_key.txt` to `.sops.yaml` (Step 3).
-2. Go to your GitHub repo → **Settings → Secrets and variables → Actions**.
-3. Create a secret named `SOPS_AGE_KEY` and paste the **entire contents** of `github_key.txt`.
-4. Delete `github_key.txt` from your local machine after adding the secret.
-
-Copy the `.github/workflows/vault-sync.yml` file from this repo into your `my-keys` repo.
-
----
-
-### Step 6 — Build key-pick
-
-```powershell
-cd E:\Projects\KeyPick
-cargo build --release
-```
-
-The binary will be at `target\release\key-pick.exe`.
-
-**Add it to your PATH** (run once, then restart your shell):
-```powershell
-Copy-Item .\target\release\key-pick.exe C:\Windows\System32\
-```
-
----
-
-## Daily Usage
-
-### Run interactively (no arguments)
-
-```powershell
+```bash
 key-pick
 ```
 
-You'll see a Windows Hello / fingerprint prompt, then a menu:
+When run without arguments, KeyPick shows a menu after biometric verification:
+
 ```
 ? What would you like to do?
 > Extract keys to .env
@@ -175,236 +309,408 @@ You'll see a Windows Hello / fingerprint prompt, then a menu:
 
 ---
 
-### Add a new service group
+### Add Secrets
 
-```powershell
+```bash
 key-pick add
 ```
 
+Secrets are organized into **groups** (e.g., `Supabase_Prod`, `Google_AI`, `Stripe_Test`).
+
 **Example session:**
 ```
-Select a group: [ + New Group ]
-Service/Group name: Supabase_Prod
+? Select a group:
+> [ + New Group ]
+  Supabase_Prod
+  Google_AI
 
-Adding keys to group: Supabase_Prod
+? Service/Group name: Stripe_Test
 
-Key Name  : DB_HOST
-Value for DB_HOST: db.xxxxx.supabase.co
-✓ Added: DB_HOST
+  Adding keys to group: Stripe_Test
 
-Add another? Y
+? Key Name: STRIPE_SECRET_KEY
+? Value for STRIPE_SECRET_KEY: sk_test_xxxxxxxxxxxxx
+  + Added: STRIPE_SECRET_KEY
 
-Key Name  : DB_PASSWORD
-Value for DB_PASSWORD: ••••••••••••
-✓ Added: DB_PASSWORD
+? Add another key to this group? Yes
 
-Add another? N
+? Key Name: STRIPE_PUBLISHABLE_KEY
+? Value for STRIPE_PUBLISHABLE_KEY: pk_test_xxxxxxxxxxxxx
+  + Added: STRIPE_PUBLISHABLE_KEY
 
-✓ Vault updated successfully.
-Remember to sync: git add vault.yaml && git commit -m "Update Supabase_Prod" && git push
+? Add another key to this group? No
+
+  Vault updated successfully.
+  Remember to sync: git add vault.yaml && git commit -m "Add Stripe_Test" && git push
 ```
 
 ---
 
-### Extract keys to a project's .env file
+### Extract to .env File
 
-```powershell
+```bash
 cd my-project
 key-pick extract
 ```
 
-**Example session:**
-```
-Select the groups to extract (Space to toggle, Enter to confirm):
-> [x] Supabase_Prod
-  [ ] Google_AI
-  [ ] Anthropic
+Select one or more groups to export:
 
-✓ 3 keys from 1 group(s) written to .env
-⚠ Add .env to your .gitignore so secrets are never committed.
+```
+? Select the groups to extract (Space to toggle, Enter to confirm):
+> [x] Supabase_Prod
+  [x] Stripe_Test
+  [ ] Google_AI
+
+  5 keys from 2 group(s) written to .env
+  WARNING: Add .env to your .gitignore so secrets are never committed.
 ```
 
 The generated `.env`:
 ```env
 # --- Supabase_Prod ---
 DB_HOST=db.xxxxx.supabase.co
-DB_PASSWORD=secret
+DB_PASSWORD=secret_value
 SUPABASE_SECRET=service_role_key_abc
+
+# --- Stripe_Test ---
+STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxx
+STRIPE_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxx
 ```
 
 ---
 
-### List vault contents (values hidden)
+### List Vault Contents
 
-```powershell
+```bash
 key-pick list
 ```
+
+Shows all groups and key names with values hidden:
 
 ```
 Vault Contents (values hidden):
 
-◆ Google_AI
-    · API_KEY
-    · PROJECT_ID
+  Google_AI
+    - API_KEY
+    - PROJECT_ID
 
-◆ Supabase_Prod
-    · DB_HOST
-    · DB_PASSWORD
-    · SUPABASE_SECRET
+  Stripe_Test
+    - STRIPE_PUBLISHABLE_KEY
+    - STRIPE_SECRET_KEY
 
-→ 2 group(s), 5 key(s) total.
+  Supabase_Prod
+    - DB_HOST
+    - DB_PASSWORD
+    - SUPABASE_SECRET
+
+  3 group(s), 7 key(s) total.
 ```
 
 ---
 
-### Copy a single key to clipboard (never touches disk)
+### Copy to Clipboard
 
-```powershell
+```bash
 key-pick copy
 ```
 
-Great for pasting into a browser or another tool without creating a `.env` file.
+Select a group, then a key. The value is copied to your clipboard without ever being written to disk.
+
+```
+? Select a group: Supabase_Prod
+? Select a key: DB_PASSWORD
+
+  Copied DB_PASSWORD to clipboard.
+```
 
 ---
 
-## Automatic Shell Injection with direnv
+### Automatic Shell Injection (direnv)
 
-`direnv` automatically loads and unloads environment variables when you enter/leave a project folder.
-
-### Setup (one-time)
-
-**Windows PowerShell** — add to your `$PROFILE`:
-```powershell
-Invoke-Expression "$(direnv hook pwsh)"
+```bash
+key-pick auto Supabase_Prod Google_AI
 ```
 
-**macOS / Linux** — add to your `~/.zshrc` or `~/.bashrc`:
-```bash
-eval "$(direnv hook bash)"   # or zsh
-```
+Outputs `export KEY='VALUE'` statements to stdout. Designed for use with [direnv](https://direnv.net/):
 
-### Per-project configuration
-
-Create a `.envrc` file in your project root:
+**Create a `.envrc` in your project:**
 ```bash
-# .envrc
-# This tells direnv to call key-pick and inject the listed groups
+# my-project/.envrc
 eval $(key-pick auto Supabase_Prod Google_AI)
 ```
 
-Then allow it once:
-```powershell
+**Allow it once:**
+```bash
 direnv allow
 ```
 
-**Now:** When you `cd` into this project, the keys appear as environment variables automatically.
-When you `cd` out, they vanish from your shell session.
+Now every time you `cd` into the project, your keys are automatically loaded as environment variables. When you `cd` out, they're removed.
 
-> ⚠ **Note:** `key-pick auto` skips the biometric gate for non-interactive shell use.
-> Your git repo and age key encryption still protect the data at rest.
+> **Note:** `key-pick auto` skips the biometric gate for non-interactive use. Your secrets are still protected by Git authentication and age encryption at rest.
+
+**direnv installation:**
+```bash
+# Windows
+winget install direnv.direnv
+
+# macOS
+brew install direnv
+
+# Linux
+apt install direnv
+```
+
+Add the hook to your shell profile:
+```bash
+# bash (~/.bashrc)
+eval "$(direnv hook bash)"
+
+# zsh (~/.zshrc)
+eval "$(direnv hook zsh)"
+
+# PowerShell ($PROFILE)
+Invoke-Expression "$(direnv hook pwsh)"
+```
 
 ---
 
-## Syncing Between Machines
+### Syncing Between Machines
 
-```powershell
-# Pull latest keys from any machine
+```bash
+# Pull latest keys on any machine
 cd my-keys
 git pull
 
-# After adding/updating keys, push them
-git commit -am "Update Google_AI keys"
+# After adding or updating keys, push
+git add vault.yaml
+git commit -m "Add Stripe_Test keys"
 git push
 ```
 
-The GitHub Action (`vault-sync.yml`) automatically re-encrypts `vault.yaml` whenever `.sops.yaml` changes.
-This means adding a new machine is as easy as:
-1. Generate the machine's age key (Step 1)
-2. Add its public key to `.sops.yaml`
-3. `git push` → GitHub does the rest
+Adding a new machine is straightforward:
+1. Run `key-pick setup` and choose "Join existing vault"
+2. The wizard clones your repo, registers the machine's key, and pushes
+
+If you've set up GitHub Actions, the vault is automatically re-encrypted for the new recipient.
 
 ---
 
-## Recovery Key (Emergency Access)
+### Recovery Key
 
-If you lose all three machines, use this procedure to regain access.
+If you lose access to all your machines, a recovery key lets you restore access.
 
-### Create a recovery key (do this once)
-
-```powershell
-# Generate a key and immediately encrypt it with a passphrase
-age-keygen | age -p > recovery_key.age
+**Create one during setup** (or run later):
+```bash
+key-pick setup recovery
 ```
 
-It will prompt for a passphrase. **Make it strong and memorable.**
+The wizard:
+1. Generates a recovery keypair
+2. Encrypts it with a passphrase you choose
+3. Adds the recovery public key to your vault recipients
+4. Saves `recovery_key.age` for you to upload to cloud storage
 
-### Add recovery key to vault
+**Storage rules:**
+| What | Where |
+|------|-------|
+| `recovery_key.age` (encrypted file) | Google Drive, iCloud, etc. |
+| Passphrase | Written on paper, in a safe/lockbox |
 
-```powershell
-# View the public key inside your encrypted recovery file
-age --decrypt recovery_key.age | grep "public key"
-```
+Store the file and passphrase in **separate physical locations**. Both are required to recover.
 
-Add that public key to `.sops.yaml` and push. The GitHub Action will authorize it.
-
-### Store the recovery key
-
-| Copy | Location |
-|------|----------|
-| `recovery_key.age` (encrypted) | Google Drive |
-| Passphrase | Written on paper in a safe location |
-
-> 💡 **The encrypted file is useless without the passphrase.** Storing them separately means both have to be compromised simultaneously.
-
-### Using the recovery key
-
-```powershell
-# On a fresh machine with age + sops installed:
+**Using the recovery key:**
+```bash
+# Decrypt the recovery key
 age -d recovery_key.age > temp_key.txt
+
+# Use it to access the vault
 SOPS_AGE_KEY_FILE=temp_key.txt key-pick list
 
-# Delete the temp key when done
-Remove-Item temp_key.txt
+# Delete the temp key immediately after
+rm temp_key.txt
 ```
 
 ---
 
-## File Reference
+## Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `key-pick` | Interactive menu (biometric required) |
+| `key-pick add` | Add or update keys in a group |
+| `key-pick extract` | Export groups to a `.env` file |
+| `key-pick list` | List all groups and key names (values hidden) |
+| `key-pick copy` | Copy a single key to clipboard |
+| `key-pick auto <groups...>` | Non-interactive export for direnv/shell eval |
+| `key-pick setup` | Full setup wizard |
+| `key-pick setup actions` | Configure GitHub Actions auto-sync |
+| `key-pick setup recovery` | Generate a recovery key |
+
+---
+
+## Project Structure
 
 ```
-key-pick/                       ← This Rust project
-├── Cargo.toml                  ← Dependencies
-├── .sops.yaml                  ← Copy to your secrets repo
-├── .gitignore
+KeyPick/
+├── Cargo.toml
+├── .sops.yaml                          # Template for secrets repos
 ├── .github/
 │   └── workflows/
-│       └── vault-sync.yml     ← Copy to your secrets repo
+│       └── vault-sync.yml              # Template: auto re-encryption CI
 └── src/
-    ├── main.rs                 ← Entry point + CLI parsing
-    ├── auth.rs                 ← Cross-platform biometric module
-    ├── vault.rs                ← SOPS encrypt/decrypt + data types
+    ├── main.rs                         # Entry point, CLI routing
+    ├── auth.rs                         # Biometric authentication
+    ├── vault.rs                        # SOPS encrypt/decrypt, data model
     └── commands/
         ├── mod.rs
-        ├── add.rs              ← `key-pick add`
-        ├── extract.rs          ← `key-pick extract`
-        ├── list.rs             ← `key-pick list`
-        ├── copy.rs             ← `key-pick copy`
-        ├── auto_export.rs      ← `key-pick auto` (for direnv)
-        └── interactive.rs      ← No-argument menu mode
-
-my-keys/                        ← Your private Git repo (separate)
-├── .sops.yaml                  ← SOPS recipient list
-├── vault.yaml                  ← Encrypted secrets (safe to commit)
-└── .github/
-    └── workflows/
-        └── vault-sync.yml      ← Auto re-encryption CI
+        ├── add.rs                      # key-pick add
+        ├── extract.rs                  # key-pick extract
+        ├── list.rs                     # key-pick list
+        ├── copy.rs                     # key-pick copy
+        ├── auto_export.rs              # key-pick auto
+        ├── interactive.rs              # No-argument menu mode
+        └── setup/
+            ├── mod.rs                  # Setup wizard orchestrator
+            ├── utils.rs                # Shared helpers (spinners, downloads, platform)
+            ├── prerequisites.rs        # age/sops auto-installer
+            ├── keygen.rs               # Age key generation
+            ├── init.rs                 # First machine flow
+            ├── join.rs                 # Additional machine flow
+            ├── actions.rs              # GitHub Actions wizard
+            └── recovery.rs             # Recovery key wizard
 ```
 
 ---
 
-## Security Notes
+## Troubleshooting
 
-- `vault.yaml` is safe to store in a private Git repo. Without an authorized `age` private key, it is unreadable.
-- `.env` files generated by `key-pick extract` **must never be committed** — they are excluded by `.gitignore`.
-- The biometric check (`Windows Hello / Touch ID`) protects the decryption step locally.
-- The `key-pick auto` mode (for direnv) skips biometrics — only use this on trusted, full-disk-encrypted machines.
+### `sops` or `age` not found after setup
+
+The setup wizard installs binaries to `~/.local/bin/` or next to `key-pick.exe`. If your shell can't find them:
+
+```bash
+# Check where they were installed
+which age sops          # macOS/Linux
+where age sops          # Windows
+
+# Add to PATH if needed (bash/zsh)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Add to PATH (PowerShell - add to $PROFILE for persistence)
+$env:PATH += ";$env:USERPROFILE\.local\bin"
+```
+
+### SOPS decryption failed
+
+```
+SOPS decryption failed: ...
+```
+
+This means your machine's age private key can't decrypt the vault. Common causes:
+
+- **Wrong directory:** Make sure you're running `key-pick` from inside your vault repo (where `vault.yaml` lives)
+- **Missing key file:** Verify your age key exists:
+  ```bash
+  # Windows
+  cat "$env:APPDATA\sops\age\keys.txt"
+
+  # macOS/Linux
+  cat ~/.config/sops/age/keys.txt
+  ```
+- **Machine not registered:** Your public key might not be in `.sops.yaml`. Run `key-pick setup` and choose "Join existing vault"
+
+### Authentication failed
+
+```
+Authentication failed: ...
+```
+
+The biometric prompt was cancelled or failed. Possible causes:
+
+- **Windows Hello not configured:** Set up a PIN/fingerprint in Settings > Accounts > Sign-in options
+- **Touch ID not enabled:** Enable in System Preferences > Touch ID
+- **Linux polkit missing:** Install `policykit-1` or your distro's equivalent
+- **Remote/SSH session:** Biometrics require a local display. Use `key-pick auto` for non-interactive access
+
+### GitHub Actions workflow not triggering
+
+- Verify the `SOPS_AGE_KEY` secret is set in your repo's Settings > Secrets > Actions
+- Check that `.github/workflows/vault-sync.yml` exists in your secrets repo
+- The workflow only triggers on pushes to `.sops.yaml` or `vault.yaml`
+- Run `key-pick setup actions` to reconfigure
+
+### `gh` CLI not authenticated
+
+If the setup wizard can't create repos or set secrets:
+
+```bash
+gh auth login
+gh auth status  # Verify
+```
+
+### Vault shows as empty after cloning on a new machine
+
+You need to register this machine's key first. The vault is encrypted for specific recipients:
+
+```bash
+key-pick setup  # Choose "Join existing vault"
+```
+
+---
+
+## Security Model
+
+| Layer | Protection |
+|-------|-----------|
+| **Git repo (private)** | Controls who can access the encrypted file |
+| **age encryption** | Each machine has a unique keypair; only authorized machines can decrypt |
+| **Biometric gate** | Windows Hello / Touch ID required before any decryption |
+| **SOPS** | Manages multi-recipient encryption; individual values encrypted in YAML |
+| **GitHub Actions key** | Separate keypair for CI, stored only in GitHub Secrets |
+| **Recovery key** | Passphrase-protected, stored offline in separate physical locations |
+
+**What is safe to commit:** `vault.yaml` (encrypted), `.sops.yaml` (public keys only), workflow files.
+
+**What must never be committed:** `.env` files, `keys.txt`, `recovery_key.age` plaintext, any file containing private keys.
+
+---
+
+## Contributing
+
+Contributions are welcome! Here's how to get started:
+
+### Development Setup
+
+```bash
+git clone https://github.com/YOUR_USERNAME/KeyPick.git
+cd KeyPick
+cargo build
+cargo check  # Fast compilation check
+```
+
+### Guidelines
+
+1. **Fork the repo** and create your branch from `master`
+2. **Write clear commit messages** following [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`, `docs:`)
+3. **Test your changes** — make sure `cargo build --release` succeeds with zero warnings
+4. **Keep it simple** — KeyPick values simplicity over feature count
+5. **Security first** — never log, print, or write secrets to disk unless the user explicitly requests it
+
+### Submitting Changes
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes and commit them
+4. Push to your fork: `git push origin feature/my-feature`
+5. Open a Pull Request with a clear description of what and why
+
+### Reporting Issues
+
+- Use [GitHub Issues](https://github.com/YOUR_USERNAME/KeyPick/issues) to report bugs or request features
+- Include your OS, Rust version (`rustc --version`), and steps to reproduce
+
+---
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
