@@ -42,6 +42,10 @@ enum Commands {
     Setup {
         #[command(subcommand)]
         sub: Option<commands::setup::SetupCommands>,
+
+        /// Run setup with detailed explanations of each step
+        #[arg(long)]
+        walkthrough: bool,
     },
 }
 
@@ -51,8 +55,8 @@ fn main() {
     let cli = Cli::parse();
 
     // Setup runs before vault exists — skip biometric gate
-    if let Some(Commands::Setup { sub }) = cli.command {
-        commands::setup::run(sub);
+    if let Some(Commands::Setup { sub, walkthrough }) = cli.command {
+        commands::setup::run(sub, walkthrough);
         return;
     }
 

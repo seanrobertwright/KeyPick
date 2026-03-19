@@ -5,13 +5,13 @@ use std::fs;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-pub fn run() {
-    if let Err(e) = run_inner() {
+pub fn run(verbose: bool) {
+    if let Err(e) = run_inner(verbose) {
         eprintln!("{} {}", "Recovery key setup failed:".red().bold(), e);
     }
 }
 
-fn run_inner() -> Result<(), String> {
+fn run_inner(verbose: bool) -> Result<(), String> {
     println!(
         "\n  {}",
         "A recovery key lets you regain access if you lose all your machines.".dimmed()
@@ -21,7 +21,39 @@ fn run_inner() -> Result<(), String> {
         "You'll set a passphrase to protect it.".dimmed()
     );
 
+    if verbose {
+        utils::explain(&[
+            "RECOVERY KEY OVERVIEW",
+            "",
+            "A recovery key is a safety net. It's an age keypair that:",
+            "  • Gets added to .sops.yaml as a vault recipient",
+            "  • Is encrypted with a passphrase YOU choose",
+            "  • Is saved as 'recovery_key.age' for offline storage",
+            "",
+            "To recover, you need BOTH the encrypted file AND the passphrase.",
+            "This is deliberate — storing them separately means a single",
+            "breach (someone finds the file, or someone learns the passphrase)",
+            "isn't enough to access your secrets.",
+            "",
+            "The process:",
+            "  1. Generate a fresh age keypair (not tied to any machine)",
+            "  2. You choose a strong passphrase",
+            "  3. We encrypt the private key with your passphrase",
+            "  4. The public key is added to .sops.yaml as a recipient",
+            "  5. The vault is re-encrypted to include the recovery key",
+        ]);
+    }
+
     // Step 1: Generate keypair
+    if verbose {
+        utils::explain(&[
+            "STEP 1: Generate a recovery age keypair.",
+            "",
+            "This is an independent keypair, separate from your machine",
+            "key. It's generated in memory — the private key will be",
+            "encrypted with your passphrase before touching disk.",
+        ]);
+    }
     let sp = utils::spinner("Generating recovery keypair...");
     let keygen_output = Command::new("age-keygen")
         .output()
@@ -48,6 +80,16 @@ fn run_inner() -> Result<(), String> {
     ));
 
     // Step 2: Get passphrase (masked input)
+    if verbose {
+        utils::explain(&[
+            "STEP 2: Choose a passphrase to protect the recovery key.",
+            "",
+            "This passphrase encrypts the recovery private key. Use",
+            "something strong and memorable — you'll need it if you",
+            "ever have to recover. Write it on paper and store it",
+            "physically (not digitally) in a secure location.",
+        ]);
+    }
     let passphrase = Password::new("Enter a strong passphrase for the recovery key:")
         .with_help_message("This protects the key file. Use something memorable but strong.")
         .with_display_mode(inquire::PasswordDisplayMode::Masked)
@@ -65,6 +107,15 @@ fn run_inner() -> Result<(), String> {
     }
 
     // Step 3: Encrypt private key with passphrase using age -p
+    if verbose {
+        utils::explain(&[
+            "STEP 3: Encrypt the recovery private key with your passphrase.",
+            "",
+            "We run `age -e -p` which uses scrypt key derivation to turn",
+            "your passphrase into an encryption key, then encrypts the",
+            "recovery private key. The output is saved as recovery_key.age.",
+        ]);
+    }
     let sp = utils::spinner("Encrypting recovery key with passphrase...");
 
     // Try AGE_PASSPHRASE env var first (supported in age 1.1+)
@@ -124,6 +175,16 @@ fn run_inner() -> Result<(), String> {
     utils::done("Encrypted recovery key saved to recovery_key.age");
 
     // Step 4: Add recovery public key to .sops.yaml
+    if verbose {
+        utils::explain(&[
+            "STEP 4: Register the recovery key as a vault recipient.",
+            "",
+            "We add the recovery public key to .sops.yaml and re-encrypt",
+            "the vault. This means the recovery key can now decrypt the",
+            "vault — but only after YOU decrypt the recovery key itself",
+            "with your passphrase.",
+        ]);
+    }
     if std::path::Path::new(".sops.yaml").exists() {
         let sp = utils::spinner("Adding recovery key to .sops.yaml...");
         let content = fs::read_to_string(".sops.yaml")
@@ -179,6 +240,27 @@ fn run_inner() -> Result<(), String> {
         "  {} Delete recovery_key.age from this machine after uploading\n",
         "3.".cyan().bold()
     );
+
+    if verbose {
+        utils::explain(&[
+            "WHY SEPARATE LOCATIONS?",
+            "",
+            "Two-factor recovery: the encrypted file is useless without",
+            "the passphrase, and the passphrase is useless without the",
+            "file. An attacker would need to compromise BOTH locations.",
+            "",
+            "Good storage examples:",
+            "  • File: Google Drive, iCloud, Dropbox, USB stick in a drawer",
+            "  • Passphrase: Paper in a safe, bank safety deposit box",
+            "",
+            "TO USE THE RECOVERY KEY LATER:",
+            "  1. Download recovery_key.age",
+            "  2. Run: age -d recovery_key.age > temp_key.txt",
+            "  3. Enter your passphrase when prompted",
+            "  4. Run: SOPS_AGE_KEY_FILE=temp_key.txt keypick list",
+            "  5. Delete temp_key.txt immediately after use",
+        ]);
+    }
 
     Ok(())
 }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="KeyPick.jpg" alt="KeyPick - In-House Secure API Key Manager" width="800"/>
+  <img src="KeyPick.png" alt="KeyPick - In-House Secure API Key Manager" width="800"/>
 </p>
 
 <h1 align="center">KeyPick</h1>
@@ -182,6 +182,237 @@ The wizard will:
 - Create or clone your encrypted vault repository
 - Optionally configure GitHub Actions auto-sync and a recovery key
 
+For a guided experience with detailed explanations of every step, use walkthrough mode:
+
+```bash
+./target/release/keypick setup --walkthrough
+```
+
+---
+
+## Setup Walkthrough
+
+This section mirrors what `keypick setup --walkthrough` shows in your terminal, explaining each step of the setup process so you understand what is happening and why.
+
+### Phase 1: Prerequisites (age + sops)
+
+**What are these tools?**
+
+KeyPick doesn't implement its own cryptography. Instead, it uses two well-audited open-source tools:
+
+| Tool | What It Does | Why KeyPick Needs It |
+|------|-------------|---------------------|
+| **[age](https://github.com/FiloSottile/age)** | Modern file encryption (like GPG, but simpler) | Each machine gets its own age keypair. The private key decrypts your vault; the public key lets others encrypt *for* this machine. |
+| **[sops](https://github.com/getsops/sops)** | Encrypts individual values inside structured files (YAML/JSON) | Handles multi-recipient encryption so one vault can be decrypted by many machines. Key *names* stay visible; only *values* are encrypted. |
+
+**What happens:** The wizard checks if `age` and `sops` are on your PATH. If either is missing, it downloads the correct binary for your OS and architecture from the official GitHub releases and places it in `~/.local/bin/` (or next to the `keypick` binary on Windows).
+
+```
+[1/4] Checking prerequisites...
+  ✓ age already installed (v1.2.0)
+  ✓ sops already installed (v3.9.4)
+```
+
+If they need to be downloaded, you'll see a progress bar for each.
+
+---
+
+### Phase 2: Machine Identity (age keypair)
+
+**Why does each machine need its own key?**
+
+This is a core security property. Each machine has a unique age keypair:
+- **Private key** — stored locally at the platform-specific path below, never shared, never committed
+- **Public key** — shared with your vault (listed in `.sops.yaml`) so secrets can be encrypted *for* this machine
+
+If a machine is compromised, you revoke just that machine's key from `.sops.yaml` without affecting any others.
+
+| Platform | Private key location |
+|----------|---------------------|
+| Windows | `%APPDATA%\sops\age\keys.txt` |
+| macOS | `~/.config/sops/age/keys.txt` |
+| Linux | `~/.config/sops/age/keys.txt` |
+
+**What happens:** The wizard checks if an age key already exists. If so, you can reuse it (recommended) or generate a new one (the old one is backed up with a `.bak` extension). If no key exists, `age-keygen` generates a fresh keypair.
+
+```
+[2/4] Machine identity...
+  ✓ Key generated: age1abc123def456...
+    Saved to: C:\Users\you\AppData\Roaming\sops\age\keys.txt
+```
+
+> **Important:** Never share, commit, or copy your private key (`keys.txt`). If this machine is lost or compromised, remove its public key from `.sops.yaml` to revoke access.
+
+---
+
+### Phase 3: Vault Repository
+
+**What is the vault?**
+
+Your vault is a Git repository containing two key files:
+
+| File | Contents | Safe to commit? |
+|------|----------|----------------|
+| `vault.yaml` | Your secrets, encrypted by sops+age | Yes (values are encrypted) |
+| `.sops.yaml` | List of public keys that can decrypt the vault | Yes (public keys only) |
+
+The repo should be **private** — even though values are encrypted, key *names* are visible in the YAML structure.
+
+**What happens:** You choose one of two paths:
+
+#### Path A: New vault (first machine)
+
+Choose this if you've never used KeyPick before.
+
+1. **Name your vault repo** (default: `my-keys`)
+2. **Create the repo** — if GitHub CLI (`gh`) is installed and authenticated, KeyPick creates a private GitHub repo and clones it locally. Otherwise, it creates a local Git repo.
+3. **Create `.sops.yaml`** — this file tells sops which public keys can decrypt the vault. Initially, only this machine's key is listed:
+   ```yaml
+   creation_rules:
+     - path_regex: vault\.yaml$
+       age: >-
+         age1your_public_key_here
+   ```
+4. **Create and encrypt `vault.yaml`** — an empty vault (`services: {}`) is created and encrypted in-place with `sops -e -i vault.yaml`
+5. **Commit and push** — both files are committed to Git and pushed to the remote (if configured)
+
+```
+[3/4] Vault repository...
+? Is this your first machine, or joining an existing vault? New vault (first machine)
+? Vault repo name? my-keys
+? Create a private GitHub repo automatically? Yes
+  ✓ Created and cloned my-keys
+  ✓ Created .sops.yaml
+  ✓ Created and encrypted vault.yaml
+  ✓ Initial commit created
+  ✓ Pushed to remote
+```
+
+#### Path B: Join existing vault (additional machine)
+
+Choose this if you already set up KeyPick on another machine.
+
+1. **Clone (or locate) your vault repo** — provide a GitHub `owner/repo` slug, a git clone URL, or a local path
+2. **Verify `.sops.yaml` exists** — confirms this is a valid vault repo
+3. **Check recipients** — shows all public keys currently in `.sops.yaml`
+4. **Register this machine** — if your public key isn't already listed:
+   - Adds your key to `.sops.yaml`
+   - Runs `sops updatekeys -y vault.yaml` to re-encrypt the vault for all recipients (including this new machine)
+   - Commits and pushes so other machines see the change
+
+```
+[3/4] Vault repository...
+? Is this your first machine, or joining an existing vault? Join existing vault
+? GitHub repo to clone? yourusername/my-keys
+  ✓ Cloned yourusername/my-keys
+
+  Current recipients:
+    - age1abc123def456ghi789...
+  ✓ Added key age1xyz987wvu654... to recipients
+  ✓ Vault re-encrypted
+  ✓ Changes committed
+  ✓ Pushed to remote
+```
+
+---
+
+### Phase 4: Optional Enhancements
+
+After the core setup, the wizard offers two optional features:
+
+#### GitHub Actions Auto-Sync
+
+**The problem it solves:** When you add a new machine, you update `.sops.yaml` with its public key. But `vault.yaml` is still encrypted for the *old* set of recipients — the new machine can't decrypt it until someone with existing access runs `sops updatekeys`.
+
+**The solution:** A GitHub Actions workflow watches for changes to `.sops.yaml`. When it detects a change, it automatically:
+1. Downloads age and sops
+2. Imports a dedicated CI age key from GitHub Secrets
+3. Runs `sops updatekeys -y vault.yaml` to re-encrypt for all current recipients
+4. Commits and pushes the re-encrypted vault
+
+**Setup steps:**
+1. **Generate a CI age keypair** — separate from your machine keys, used only by GitHub Actions
+2. **Add the CI public key to `.sops.yaml`** — so the workflow can decrypt during re-encryption
+3. **Store the CI private key as a GitHub Secret** (`SOPS_AGE_KEY`) — piped to `gh secret set`, encrypted by GitHub with libsodium
+4. **Install the workflow file** — `.github/workflows/vault-sync.yml` is created in your repo
+5. **Commit and push** — activates the workflow
+
+```
+? Set up GitHub Actions auto-sync? Yes
+  ✓ Generated Actions key: age1actionskey123...
+  ✓ Added Actions key to .sops.yaml
+  ✓ Set SOPS_AGE_KEY secret on GitHub
+  ✓ Installed .github/workflows/vault-sync.yml
+  ✓ Pushed to remote
+```
+
+#### Recovery Key
+
+**The problem it solves:** If you lose access to *all* your machines (laptop stolen, desktop dies), you lose access to your vault forever. A recovery key is your safety net.
+
+**How it works:**
+1. **Generate a recovery age keypair** — not tied to any machine
+2. **You choose a strong passphrase** — this protects the recovery key itself
+3. **Encrypt the private key with your passphrase** — saved as `recovery_key.age`
+4. **Add the recovery public key to `.sops.yaml`** — so the recovery key can decrypt the vault
+5. **Re-encrypt the vault** — includes the recovery key as a recipient
+
+**Storage rules (two-factor recovery):**
+
+| What | Where | Why |
+|------|-------|-----|
+| `recovery_key.age` (encrypted file) | Cloud storage (Google Drive, iCloud, Dropbox) | Accessible from anywhere, but useless without the passphrase |
+| Passphrase | Paper in a safe or lockbox | Physical security, but useless without the file |
+
+Store the file and passphrase in **separate physical locations**. An attacker would need to compromise *both* to access your secrets.
+
+**To use the recovery key later:**
+```bash
+# 1. Download recovery_key.age from cloud storage
+# 2. Decrypt it with your passphrase
+age -d recovery_key.age > temp_key.txt
+
+# 3. Use it to access your vault
+SOPS_AGE_KEY_FILE=temp_key.txt keypick list
+
+# 4. Delete the temporary plaintext key immediately
+rm temp_key.txt
+```
+
+```
+? Create a recovery key? Yes
+  ✓ Generated recovery key: age1recoverykey123...
+? Enter a strong passphrase for the recovery key: ********
+? Confirm passphrase: ********
+  ✓ Encrypted recovery key saved to recovery_key.age
+  ✓ Added recovery key to .sops.yaml recipients
+  ✓ Vault re-encrypted with recovery key
+  ✓ Changes committed and pushed
+```
+
+---
+
+### After Setup
+
+Once setup completes, you're ready to use KeyPick:
+
+```bash
+# Navigate to your vault repo
+cd my-keys
+
+# Store your first secrets
+keypick add
+
+# In a project directory, export secrets to .env
+cd ~/projects/my-app
+keypick extract
+
+# On another machine, join the vault
+keypick setup   # Choose "Join existing vault"
+```
+
+Your secrets are encrypted at rest and protected by biometric authentication. They are only ever decrypted in memory during a `keypick` session.
+
 ---
 
 ## Installation
@@ -283,9 +514,10 @@ On additional machines, choose "Join existing vault" to clone your repo and regi
 ### Setup Subcommands
 
 ```bash
-keypick setup           # Full wizard
-keypick setup actions   # Just the GitHub Actions configuration
-keypick setup recovery  # Just the recovery key generation
+keypick setup                    # Full wizard
+keypick setup --walkthrough      # Full wizard with step-by-step explanations
+keypick setup actions            # Just the GitHub Actions configuration
+keypick setup recovery           # Just the recovery key generation
 ```
 
 ---
@@ -543,8 +775,11 @@ rm temp_key.txt
 | `keypick copy` | Copy a single key to clipboard |
 | `keypick auto <groups...>` | Non-interactive export for direnv/shell eval |
 | `keypick setup` | Full setup wizard |
+| `keypick setup --walkthrough` | Setup wizard with detailed explanations of each step |
 | `keypick setup actions` | Configure GitHub Actions auto-sync |
+| `keypick setup actions --walkthrough` | Actions setup with detailed explanations |
 | `keypick setup recovery` | Generate a recovery key |
+| `keypick setup recovery --walkthrough` | Recovery key setup with detailed explanations |
 
 ---
 

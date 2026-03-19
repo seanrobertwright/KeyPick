@@ -8,8 +8,24 @@ use std::path::Path;
 const AGE_VERSION: &str = "1.2.0";
 const SOPS_VERSION: &str = "3.9.4";
 
-pub fn run() -> Result<(), String> {
+pub fn run(verbose: bool) -> Result<(), String> {
+    if verbose {
+        utils::explain(&[
+            "Checking for 'age' — the encryption engine.",
+            "age uses X25519 key agreement and ChaCha20-Poly1305 encryption.",
+            "It's what actually encrypts and decrypts your secret values.",
+        ]);
+    }
     check_and_install("age", AGE_VERSION, install_age)?;
+
+    if verbose {
+        utils::explain(&[
+            "Checking for 'sops' — the secret operations manager.",
+            "sops wraps age to handle multi-recipient encryption inside",
+            "structured files (YAML/JSON). It encrypts VALUES while",
+            "leaving KEYS visible, so git diffs stay meaningful.",
+        ]);
+    }
     check_and_install("sops", SOPS_VERSION, install_sops)?;
     Ok(())
 }

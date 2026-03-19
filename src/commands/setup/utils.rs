@@ -117,6 +117,15 @@ pub fn skip(msg: &str) {
     println!("  {} {}", "–".dimmed(), msg.dimmed());
 }
 
+/// Print a walkthrough explanation block.
+pub fn explain(lines: &[&str]) {
+    println!();
+    for line in lines {
+        println!("  {} {}", "│".cyan(), line.dimmed());
+    }
+    println!();
+}
+
 /// Detect OS and arch for download URLs.
 pub fn platform() -> (&'static str, &'static str) {
     let os = if cfg!(target_os = "windows") {

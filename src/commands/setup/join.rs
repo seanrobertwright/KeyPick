@@ -5,13 +5,27 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-pub fn run(public_key: &str) -> Result<(), String> {
+pub fn run(public_key: &str, verbose: bool) -> Result<(), String> {
     let has_gh = utils::command_exists("gh");
 
+    if verbose {
+        utils::explain(&[
+            "JOINING AN EXISTING VAULT",
+            "",
+            "You already have a vault set up on another machine. We need to:",
+            "  1. Clone (or locate) your existing vault repository",
+            "  2. Add this machine's public key to .sops.yaml",
+            "  3. Re-encrypt the vault so this machine can decrypt it",
+            "  4. Commit and push so other machines see the change",
+            "",
+            "After this, you can use all keypick commands from this machine.",
+        ]);
+    }
+
     let vault_dir = if has_gh {
-        join_with_gh()?
+        join_with_gh(verbose)?
     } else {
-        join_manual()?
+        join_manual(verbose)?
     };
 
     // Verify .sops.yaml exists
@@ -27,6 +41,17 @@ pub fn run(public_key: &str) -> Result<(), String> {
     let content = fs::read_to_string(&sops_path)
         .map_err(|e| format!("Failed to read .sops.yaml: {}", e))?;
 
+    if verbose {
+        utils::explain(&[
+            "CHECKING RECIPIENTS",
+            "",
+            "The .sops.yaml file lists every public key that can decrypt",
+            "the vault. Each key represents a machine (or GitHub Actions,",
+            "or a recovery key). We'll check if this machine's key is",
+            "already in the list.",
+        ]);
+    }
+
     println!("\n  {}", "Current recipients:".dimmed());
     for line in content.lines() {
         let trimmed = line.trim().trim_end_matches(',');
@@ -39,6 +64,22 @@ pub fn run(public_key: &str) -> Result<(), String> {
     if content.contains(public_key) {
         utils::done("This machine's key is already a recipient");
     } else {
+        if verbose {
+            utils::explain(&[
+                "ADDING THIS MACHINE AS A RECIPIENT",
+                "",
+                "Your public key is not yet in .sops.yaml, so we'll add it.",
+                "Then we run `sops updatekeys -y vault.yaml` which tells sops",
+                "to re-encrypt the vault for ALL recipients (including this",
+                "new machine). This requires that the current machine running",
+                "the command can already decrypt the vault (which it can,",
+                "because we're inside the cloned repo from the original machine).",
+                "",
+                "After re-encryption, we commit and push so other machines",
+                "can pull the updated vault.",
+            ]);
+        }
+
         let sp = utils::spinner("Adding this machine's key to recipients...");
         let updated = utils::add_recipient(&content, public_key)?;
         fs::write(&sops_path, &updated)
@@ -100,7 +141,14 @@ pub fn run(public_key: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn join_with_gh() -> Result<String, String> {
+fn join_with_gh(verbose: bool) -> Result<String, String> {
+    if verbose {
+        utils::explain(&[
+            "The GitHub CLI (`gh`) is available, so you can clone your",
+            "vault repo by providing the 'owner/repo' format.",
+            "Example: myusername/my-keys",
+        ]);
+    }
     let repo = Text::new("GitHub repo to clone? (e.g. username/my-keys)")
         .with_help_message("Your private vault repository")
         .prompt()
@@ -121,7 +169,14 @@ fn join_with_gh() -> Result<String, String> {
     }
 }
 
-fn join_manual() -> Result<String, String> {
+fn join_manual(verbose: bool) -> Result<String, String> {
+    if verbose {
+        utils::explain(&[
+            "Provide either:",
+            "  • A git clone URL (e.g. git@github.com:user/my-keys.git)",
+            "  • A local path to an already-cloned vault repo (e.g. ./my-keys)",
+        ]);
+    }
     let input = Text::new("Path to existing vault repo (or git clone URL)?")
         .with_help_message("e.g. git@github.com:user/my-keys.git or ./my-keys")
         .prompt()
