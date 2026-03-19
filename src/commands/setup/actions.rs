@@ -33,12 +33,14 @@ fn run_inner() -> Result<(), String> {
     );
 
     // Step 1: Generate age keypair for GH Actions
+    // Use tempdir + path so the file doesn't exist yet (age-keygen refuses to overwrite)
     let sp = utils::spinner("Generating GitHub Actions age key...");
-    let tmp = tempfile::NamedTempFile::new()
-        .map_err(|e| format!("Temp file error: {}", e))?;
+    let tmp_dir = tempfile::tempdir()
+        .map_err(|e| format!("Temp dir error: {}", e))?;
+    let key_path = tmp_dir.path().join("actions_key.txt");
 
     let output = Command::new("age-keygen")
-        .args(["-o", &tmp.path().to_string_lossy()])
+        .args(["-o", &key_path.to_string_lossy()])
         .output()
         .map_err(|e| format!("age-keygen failed: {}", e))?;
     sp.finish_and_clear();
@@ -50,9 +52,9 @@ fn run_inner() -> Result<(), String> {
         ));
     }
 
-    let key_content = fs::read_to_string(tmp.path())
+    let key_content = fs::read_to_string(&key_path)
         .map_err(|e| format!("Failed to read generated key: {}", e))?;
-    let pubkey = utils::read_public_key(tmp.path())?;
+    let pubkey = utils::read_public_key(&key_path)?;
 
     utils::done(&format!(
         "Generated Actions key: {}...",
