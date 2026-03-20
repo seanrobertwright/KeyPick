@@ -76,10 +76,12 @@ pub fn run() {
 
     println!("\n{}", "  Encrypting and saving vault...".dimmed());
     vault::save(&vault);
+    let vault_dir = vault::vault_dir();
     println!("{}", "  ✓ Vault updated successfully.".green().bold());
     println!(
-        "\n  {} git add vault.yaml && git commit -m \"Update {}\" && git push",
+        "\n  {} cd {} && git add vault.yaml && git commit -m \"Update {}\" && git push",
         "Remember to sync:".dimmed(),
+        vault_dir.display(),
         group_name
     );
 }

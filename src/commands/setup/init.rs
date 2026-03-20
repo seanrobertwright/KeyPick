@@ -1,4 +1,5 @@
 use crate::commands::setup::utils;
+use crate::vault;
 use colored::*;
 use inquire::{Confirm, Text};
 use std::fs;
@@ -15,6 +16,9 @@ pub fn run(public_key: &str, verbose: bool) -> Result<(), String> {
             "You'll choose a name for your vault repository. This becomes",
             "a Git repo containing your encrypted secrets. The default",
             "name is 'my-keys' but you can call it anything.",
+            "",
+            "By default, KeyPick stores vault repos in your per-user vault home:",
+            &format!("  {}", vault::vaults_home_dir().display()),
             "",
             "If the GitHub CLI (`gh`) is installed and authenticated, we",
             "can create a PRIVATE GitHub repo automatically. Otherwise,",
@@ -145,11 +149,15 @@ pub fn run(public_key: &str, verbose: bool) -> Result<(), String> {
 }
 
 fn init_with_gh(repo_name: &str, verbose: bool) -> Result<String, String> {
+    let vault_home = vault::vaults_home_dir();
+    fs::create_dir_all(&vault_home)
+        .map_err(|e| format!("Failed to create {}: {}", vault_home.display(), e))?;
+
     if verbose {
         utils::explain(&[
             "The GitHub CLI (`gh`) is available. We can create a private",
             "repo on GitHub and clone it locally in one step. This runs:",
-            &format!("  gh repo create {} --private --clone", repo_name),
+            &format!("  (from {}) gh repo create {} --private --clone", vault_home.display(), repo_name),
             "",
             "If you decline, we'll create a local-only Git repo instead.",
         ]);
@@ -162,16 +170,26 @@ fn init_with_gh(repo_name: &str, verbose: bool) -> Result<String, String> {
 
     if create_remote {
         let sp = utils::spinner("Creating private GitHub repo...");
-        let result = utils::run_cmd(
-            "gh",
-            &["repo", "create", repo_name, "--private", "--clone"],
-        );
+        let result = Command::new("gh")
+            .args(["repo", "create", repo_name, "--private", "--clone"])
+            .current_dir(&vault_home)
+            .output()
+            .map_err(|e| format!("Failed to run `gh`: {}", e))
+            .and_then(|output| {
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                } else {
+                    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+                }
+            });
         sp.finish_and_clear();
 
         match result {
             Ok(_) => {
+                let dir = vault_home.join(repo_name);
+                let _ = vault::remember_vault_dir(&dir);
                 utils::done(&format!("Created and cloned {}", repo_name));
-                Ok(repo_name.to_string())
+                Ok(dir.display().to_string())
             }
             Err(e) => {
                 utils::warn(&format!("gh repo create failed: {}", e));
@@ -185,6 +203,8 @@ fn init_with_gh(repo_name: &str, verbose: bool) -> Result<String, String> {
 }
 
 fn init_manual(repo_name: &str, verbose: bool) -> Result<String, String> {
+    let default_dir = vault::default_vault_dir(repo_name);
+    let default_dir_display = default_dir.display().to_string();
     if verbose {
         utils::explain(&[
             "MANUAL REPO SETUP",
@@ -195,7 +215,7 @@ fn init_manual(repo_name: &str, verbose: bool) -> Result<String, String> {
         ]);
     }
     let dir = Text::new("Local directory for the vault repo?")
-        .with_default(repo_name)
+        .with_default(&default_dir_display)
         .prompt()
         .map_err(|_| "Cancelled".to_string())?;
 
@@ -222,5 +242,6 @@ fn init_manual(repo_name: &str, verbose: bool) -> Result<String, String> {
     );
     println!();
 
+    let _ = vault::remember_vault_dir(Path::new(&dir));
     Ok(dir)
 }

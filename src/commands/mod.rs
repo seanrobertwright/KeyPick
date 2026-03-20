@@ -5,3 +5,4 @@ pub mod extract;
 pub mod interactive;
 pub mod list;
 pub mod setup;
+pub mod vaults;

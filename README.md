@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
+  <a href="TUTORIAL.md">Tutorial</a> &bull;
   <a href="#usage">Usage</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#troubleshooting">Troubleshooting</a> &bull;
@@ -20,6 +21,8 @@
 ---
 
 ## Overview
+
+New to KeyPick? Start with [TUTORIAL.md](TUTORIAL.md). It walks through installation, setup, multi-machine vaults, project workflows, `direnv`, recovery strategy, and advanced usage patterns.
 
 KeyPick is a terminal-based secrets manager designed for developers who work across multiple machines. Instead of copying `.env` files around, texting yourself API keys, or storing them in plaintext notes, KeyPick gives you:
 
@@ -35,6 +38,7 @@ keypick add      # Store secrets in encrypted groups
 keypick extract  # Export to .env files
 keypick copy     # Copy a single key to clipboard
 keypick auto     # Non-interactive export for direnv/CI
+keypick vault    # Manage vault selection
 ```
 
 ---
@@ -179,7 +183,7 @@ The wizard will:
 - Check for `age` and `sops`, downloading them automatically if missing
 - Generate (or detect) your machine's age encryption key
 - Ask whether this is your first machine or you're joining an existing vault
-- Create or clone your encrypted vault repository
+- Create or clone your encrypted vault repository under `~/.keypick/vaults/` by default
 - Optionally configure GitHub Actions auto-sync and a recovery key
 
 For a guided experience with detailed explanations of every step, use walkthrough mode:
@@ -265,7 +269,7 @@ The repo should be **private** — even though values are encrypted, key *names*
 Choose this if you've never used KeyPick before.
 
 1. **Name your vault repo** (default: `my-keys`)
-2. **Create the repo** — if GitHub CLI (`gh`) is installed and authenticated, KeyPick creates a private GitHub repo and clones it locally. Otherwise, it creates a local Git repo.
+2. **Create the repo** — if GitHub CLI (`gh`) is installed and authenticated, KeyPick creates a private GitHub repo and clones it locally under `~/.keypick/vaults/`. Otherwise, it creates a local Git repo there.
 3. **Create `.sops.yaml`** — this file tells sops which public keys can decrypt the vault. Initially, only this machine's key is listed:
    ```yaml
    creation_rules:
@@ -286,13 +290,14 @@ Choose this if you've never used KeyPick before.
   ✓ Created and encrypted vault.yaml
   ✓ Initial commit created
   ✓ Pushed to remote
+  Vault directory: C:\Users\you\.keypick\vaults\my-keys
 ```
 
 #### Path B: Join existing vault (additional machine)
 
 Choose this if you already set up KeyPick on another machine.
 
-1. **Clone (or locate) your vault repo** — provide a GitHub `owner/repo` slug, a git clone URL, or a local path
+1. **Clone (or locate) your vault repo** — provide a GitHub `owner/repo` slug, a git clone URL, or a local path. New clones go into `~/.keypick/vaults/` by default.
 2. **Verify `.sops.yaml` exists** — confirms this is a valid vault repo
 3. **Check recipients** — shows all public keys currently in `.sops.yaml`
 4. **Register this machine** — if your public key isn't already listed:
@@ -312,6 +317,7 @@ Choose this if you already set up KeyPick on another machine.
   ✓ Vault re-encrypted
   ✓ Changes committed
   ✓ Pushed to remote
+  Vault directory: C:\Users\you\.keypick\vaults\my-keys
 ```
 
 ---
@@ -397,11 +403,13 @@ rm temp_key.txt
 Once setup completes, you're ready to use KeyPick:
 
 ```bash
-# Navigate to your vault repo
-cd my-keys
-
 # Store your first secrets
 keypick add
+
+# Inspect or change the active vault
+keypick vault list
+keypick vault current
+keypick vault select
 
 # In a project directory, export secrets to .env
 cd ~/projects/my-app
@@ -506,7 +514,7 @@ keypick setup
 The interactive wizard walks you through everything. On your first machine it will:
 1. Install `age` and `sops` (if missing)
 2. Generate your machine's age encryption key
-3. Create a private vault repository
+3. Create a private vault repository under `~/.keypick/vaults/`
 4. Optionally set up GitHub Actions and a recovery key
 
 On additional machines, choose "Join existing vault" to clone your repo and register the new machine's key.
@@ -518,6 +526,34 @@ keypick setup                    # Full wizard
 keypick setup --walkthrough      # Full wizard with step-by-step explanations
 keypick setup actions            # Just the GitHub Actions configuration
 keypick setup recovery           # Just the recovery key generation
+```
+
+### Vault Commands
+
+```bash
+keypick vault list      # Show known vault repositories
+keypick vault current   # Print the active vault repository
+keypick vault select    # Interactively choose the active vault repository
+```
+
+KeyPick resolves a vault in this order:
+1. `KEYPICK_VAULT_DIR`
+2. The current directory if you are already inside a vault repo
+3. The remembered active vault
+4. Vaults under `~/.keypick/vaults/`
+5. An interactive selector if multiple candidates are available
+
+If your machine blocks writes to `~/.keypick`, set `KEYPICK_HOME` to a writable directory. On Windows, a good default is:
+
+```powershell
+setx KEYPICK_HOME "$env:USERPROFILE\OneDrive\Documents\KeyPick"
+```
+
+Then open a new shell and run:
+
+```powershell
+keypick vault select
+keypick vault current
 ```
 
 ---
@@ -573,7 +609,7 @@ Secrets are organized into **groups** (e.g., `Supabase_Prod`, `Google_AI`, `Stri
 ? Add another key to this group? No
 
   Vault updated successfully.
-  Remember to sync: git add vault.yaml && git commit -m "Add Stripe_Test" && git push
+  Remember to sync: cd ~/.keypick/vaults/my-keys && git add vault.yaml && git commit -m "Add Stripe_Test" && git push
 ```
 
 ---
@@ -710,7 +746,7 @@ Invoke-Expression "$(direnv hook pwsh)"
 
 ```bash
 # Pull latest keys on any machine
-cd my-keys
+cd ~/.keypick/vaults/my-keys
 git pull
 
 # After adding or updating keys, push
@@ -774,6 +810,9 @@ rm temp_key.txt
 | `keypick list` | List all groups and key names (values hidden) |
 | `keypick copy` | Copy a single key to clipboard |
 | `keypick auto <groups...>` | Non-interactive export for direnv/shell eval |
+| `keypick vault list` | Show known vault repositories |
+| `keypick vault current` | Print the active vault repository |
+| `keypick vault select` | Interactively choose the active vault repository |
 | `keypick setup` | Full setup wizard |
 | `keypick setup --walkthrough` | Setup wizard with detailed explanations of each step |
 | `keypick setup actions` | Configure GitHub Actions auto-sync |
@@ -804,6 +843,7 @@ KeyPick/
         ├── copy.rs                     # keypick copy
         ├── auto_export.rs              # keypick auto
         ├── interactive.rs              # No-argument menu mode
+        ├── vaults.rs                   # keypick vault
         └── setup/
             ├── mod.rs                  # Setup wizard orchestrator
             ├── utils.rs                # Shared helpers (spinners, downloads, platform)
@@ -843,7 +883,8 @@ SOPS decryption failed: ...
 
 This means your machine's age private key can't decrypt the vault. Common causes:
 
-- **Wrong directory:** Make sure you're running `keypick` from inside your vault repo (where `vault.yaml` lives)
+- **Wrong vault selected:** Run `keypick vault current` and `keypick vault list`, or set `KEYPICK_VAULT_DIR` explicitly
+- **KeyPick state directory is not writable:** Set `KEYPICK_HOME` to a writable location, then re-run `keypick vault select`
 - **Missing key file:** Verify your age key exists:
   ```bash
   # Windows
@@ -889,6 +930,25 @@ You need to register this machine's key first. The vault is encrypted for specif
 
 ```bash
 keypick setup  # Choose "Join existing vault"
+```
+
+### Multiple vaults are available
+
+```bash
+keypick vault list
+keypick vault select
+```
+
+Or override a single command explicitly:
+
+```bash
+KEYPICK_VAULT_DIR=/path/to/vault keypick list
+```
+
+If KeyPick cannot save the selected vault because its state directory is not writable, set `KEYPICK_HOME` first:
+
+```powershell
+setx KEYPICK_HOME "$env:USERPROFILE\OneDrive\Documents\KeyPick"
 ```
 
 ---

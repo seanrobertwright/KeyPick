@@ -1,4 +1,5 @@
 use crate::commands::setup::utils;
+use crate::vault;
 use colored::*;
 use std::fs;
 use std::io::Write;
@@ -13,6 +14,9 @@ pub fn run(verbose: bool) {
 }
 
 fn run_inner(verbose: bool) -> Result<(), String> {
+    let vault_dir = vault::vault_dir();
+    let vault_dir_str = vault_dir.display().to_string();
+
     if verbose {
         utils::explain(&[
             "GITHUB ACTIONS AUTO-SYNC",
@@ -42,8 +46,8 @@ fn run_inner(verbose: bool) -> Result<(), String> {
     }
 
     // Verify we're in a git repo with a remote
-    let remote_url = utils::run_cmd("git", &["remote", "get-url", "origin"])
-        .map_err(|_| "Not in a git repo with an 'origin' remote. Run from your vault repo.")?;
+    let remote_url = utils::run_git(&vault_dir_str, &["remote", "get-url", "origin"])
+        .map_err(|_| "Selected vault is not in a git repo with an 'origin' remote.")?;
 
     println!(
         "  {} {}",
@@ -100,7 +104,7 @@ fn run_inner(verbose: bool) -> Result<(), String> {
         ]);
     }
     let sp = utils::spinner("Adding Actions key to .sops.yaml...");
-    let sops_content = fs::read_to_string(".sops.yaml")
+    let sops_content = fs::read_to_string(vault_dir.join(".sops.yaml"))
         .map_err(|e| format!("Failed to read .sops.yaml: {}", e))?;
 
     if sops_content.contains(&pubkey) {
@@ -108,7 +112,7 @@ fn run_inner(verbose: bool) -> Result<(), String> {
         utils::skip("Actions key already in .sops.yaml");
     } else {
         let updated = utils::add_recipient(&sops_content, &pubkey)?;
-        fs::write(".sops.yaml", &updated)
+        fs::write(vault_dir.join(".sops.yaml"), &updated)
             .map_err(|e| format!("Failed to write .sops.yaml: {}", e))?;
         sp.finish_and_clear();
         utils::done("Added Actions key to .sops.yaml");
@@ -162,9 +166,9 @@ fn run_inner(verbose: bool) -> Result<(), String> {
         ]);
     }
     let sp = utils::spinner("Installing workflow file...");
-    fs::create_dir_all(".github/workflows")
+    fs::create_dir_all(vault_dir.join(".github/workflows"))
         .map_err(|e| format!("Failed to create .github/workflows: {}", e))?;
-    fs::write(".github/workflows/vault-sync.yml", VAULT_SYNC_WORKFLOW)
+    fs::write(vault_dir.join(".github/workflows/vault-sync.yml"), VAULT_SYNC_WORKFLOW)
         .map_err(|e| format!("Failed to write workflow: {}", e))?;
     sp.finish_and_clear();
     utils::done("Installed .github/workflows/vault-sync.yml");
@@ -180,9 +184,9 @@ fn run_inner(verbose: bool) -> Result<(), String> {
         ]);
     }
     let sp = utils::spinner("Committing and pushing...");
-    let _ = utils::run_cmd("git", &["add", ".github", ".sops.yaml"]);
-    let _ = utils::run_cmd("git", &["commit", "-m", "feat: add GitHub Actions auto re-encryption"]);
-    let push_result = utils::run_cmd("git", &["push"]);
+    let _ = utils::run_git(&vault_dir_str, &["add", ".github", ".sops.yaml"]);
+    let _ = utils::run_git(&vault_dir_str, &["commit", "-m", "feat: add GitHub Actions auto re-encryption"]);
+    let push_result = utils::run_git(&vault_dir_str, &["push"]);
     sp.finish_and_clear();
 
     match push_result {

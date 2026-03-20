@@ -1,0 +1,38 @@
+{
+  "id": "2955b2f7-c74a-4a7a-930b-6d4a9e75dcc4",
+  "slug": "fix-terminal-input-after-biometric-auth",
+  "title": "Fix Terminal Input after Biometric Auth",
+  "description": "Fix terminal keyboard input bug occurring after Windows Hello authentication",
+  "status": "completed",
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Add terminal state recovery function",
+      "description": "Create a function in `src/terminal.rs` called `restore_terminal_state` that toggles raw mode on and off using `crossterm::terminal::enable_raw_mode` and `disable_raw_mode` to force the terminal to rebuild its state.",
+      "status": "completed",
+      "expectedOutcome": "`src/terminal.rs` contains a new public function `restore_terminal_state()`.",
+      "summary": "Added `restore_terminal_state` function to `src/terminal.rs` to toggle raw mode on and off, resetting terminal console modes.",
+      "completedAt": "2026-03-19T16:28:59.383Z"
+    },
+    {
+      "id": "step-2",
+      "title": "Apply terminal recovery post-authentication",
+      "description": "Call `terminal::restore_terminal_state()` in `src/main.rs` immediately after a successful `auth::verify()` check.",
+      "status": "completed",
+      "dependencies": [
+        "step-1"
+      ],
+      "expectedOutcome": "The application will successfully restore terminal input modes after the OS-level Windows Hello dialog closes, preventing the `inquire` prompts from misinterpreting keyboard input.",
+      "summary": "Called `terminal::restore_terminal_state()` in `src/main.rs` right after a successful `auth::verify()` call. This ensures the terminal mode is fully reset before `inquire` begins presenting prompts.",
+      "completedAt": "2026-03-19T16:33:02.284Z"
+    }
+  ],
+  "initialModel": {
+    "provider": "google-gemini-cli",
+    "id": "gemini-3.1-pro-preview",
+    "name": "Gemini 3.1 Pro Preview (Cloud Code Assist)"
+  },
+  "context": "The user reported broken terminal input after authenticating with Windows Hello. The likely culprit is the Windows Hello dialog silently mutating the Windows Console Modes, breaking `crossterm`'s assumptions when `inquire` subsequently attempts to read keyboard input.\n\nWe have written our findings to `.tide/research.md`.",
+  "createdAt": "2026-03-19T16:02:14.110Z",
+  "updatedAt": "2026-03-19T16:33:02.285Z"
+}

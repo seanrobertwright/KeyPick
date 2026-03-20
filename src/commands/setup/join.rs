@@ -1,4 +1,5 @@
 use crate::commands::setup::utils;
+use crate::vault;
 use colored::*;
 use inquire::Text;
 use std::fs;
@@ -133,15 +134,16 @@ pub fn run(public_key: &str, verbose: bool) -> Result<(), String> {
         "Vault directory:".dimmed(),
         vault_dir.cyan().bold()
     );
-    println!(
-        "  {}",
-        "You can now use `keypick` commands from this directory.".dimmed()
-    );
+    println!("  {}", "KeyPick will remember this vault selection.".dimmed());
 
     Ok(())
 }
 
 fn join_with_gh(verbose: bool) -> Result<String, String> {
+    let vault_home = vault::vaults_home_dir();
+    fs::create_dir_all(&vault_home)
+        .map_err(|e| format!("Failed to create {}: {}", vault_home.display(), e))?;
+
     if verbose {
         utils::explain(&[
             "The GitHub CLI (`gh`) is available, so you can clone your",
@@ -157,24 +159,40 @@ fn join_with_gh(verbose: bool) -> Result<String, String> {
     let repo_name = repo.split('/').last().unwrap_or(&repo);
 
     let sp = utils::spinner("Cloning repository...");
-    let result = utils::run_cmd("gh", &["repo", "clone", &repo]);
+    let result = Command::new("gh")
+        .args(["repo", "clone", &repo])
+        .current_dir(&vault_home)
+        .output()
+        .map_err(|e| format!("Failed to run `gh`: {}", e))
+        .and_then(|output| {
+            if output.status.success() {
+                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            } else {
+                Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+            }
+        });
     sp.finish_and_clear();
 
     match result {
         Ok(_) => {
+            let dir = vault_home.join(repo_name);
+            let _ = vault::remember_vault_dir(&dir);
             utils::done(&format!("Cloned {}", repo));
-            Ok(repo_name.to_string())
+            Ok(dir.display().to_string())
         }
         Err(e) => Err(format!("Clone failed: {}", e)),
     }
 }
 
 fn join_manual(verbose: bool) -> Result<String, String> {
+    let default_dir = vault::vaults_home_dir().display().to_string();
     if verbose {
         utils::explain(&[
             "Provide either:",
             "  • A git clone URL (e.g. git@github.com:user/my-keys.git)",
-            "  • A local path to an already-cloned vault repo (e.g. ./my-keys)",
+            "  • A local path to an already-cloned vault repo",
+            "",
+            &format!("New clones are stored under: {}", default_dir),
         ]);
     }
     let input = Text::new("Path to existing vault repo (or git clone URL)?")
@@ -188,10 +206,14 @@ fn join_manual(verbose: bool) -> Result<String, String> {
             .last()
             .unwrap_or("my-keys")
             .trim_end_matches(".git");
+        let vault_home = vault::vaults_home_dir();
+        fs::create_dir_all(&vault_home)
+            .map_err(|e| format!("Failed to create {}: {}", vault_home.display(), e))?;
 
         let sp = utils::spinner("Cloning repository...");
         let output = Command::new("git")
             .args(["clone", &input])
+            .current_dir(&vault_home)
             .output()
             .map_err(|e| format!("git clone failed: {}", e))?;
         sp.finish_and_clear();
@@ -202,12 +224,15 @@ fn join_manual(verbose: bool) -> Result<String, String> {
                 String::from_utf8_lossy(&output.stderr)
             ));
         }
-        utils::done(&format!("Cloned to {}/", repo_name));
-        Ok(repo_name.to_string())
+        let dir = vault_home.join(repo_name);
+        let _ = vault::remember_vault_dir(&dir);
+        utils::done(&format!("Cloned to {}", dir.display()));
+        Ok(dir.display().to_string())
     } else {
         if !Path::new(&input).exists() {
             return Err(format!("Directory {} does not exist", input));
         }
+        let _ = vault::remember_vault_dir(Path::new(&input));
         Ok(input)
     }
 }

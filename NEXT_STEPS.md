@@ -2,6 +2,15 @@
 
 > Follow these steps **in order** to get KeyPick running across your machines.
 
+> [!TIP]
+> If this machine blocks writes to `C:\Users\you\.keypick`, set a writable KeyPick home first:
+>
+> ```powershell
+> setx KEYPICK_HOME "$env:USERPROFILE\OneDrive\Documents\KeyPick"
+> ```
+>
+> Then open a new shell before continuing.
+
 ---
 
 ## Phase 1: Install Prerequisites (All 3 Machines)
@@ -63,9 +72,11 @@ Public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
 3. Set it to **Private**
 4. Do **not** initialize with a README (you'll push from local)
 
-### 5. Clone it and set up the SOPS config
+### 5. Clone it into KeyPick's vault home and set up the SOPS config
 
 ```powershell
+New-Item -ItemType Directory -Path "$HOME\.keypick\vaults" -Force
+Set-Location "$HOME\.keypick\vaults"
 git clone git@github.com:YOUR_USERNAME/my-keys.git
 cd my-keys
 ```
@@ -132,6 +143,7 @@ keypick --version
 
 On Desktop 2 and your Laptop:
 ```powershell
+Set-Location "$HOME\.keypick\vaults"
 git clone git@github.com:YOUR_USERNAME/my-keys.git
 ```
 
@@ -141,10 +153,10 @@ Then copy `keypick.exe` to each machine (via Google Drive, USB, or build from so
 
 ## Phase 4: Add Your First Keys
 
-### 11. Navigate to your secrets repo and run keypick
+### 11. Select your vault and run keypick
 
 ```powershell
-cd my-keys
+keypick vault select
 keypick add
 ```
 
@@ -167,7 +179,7 @@ git push
 ### 13. Pull on your other machines
 
 ```powershell
-cd my-keys
+cd "$HOME\.keypick\vaults\my-keys"
 git pull
 keypick list   # Verify the keys are there
 ```
@@ -209,7 +221,7 @@ creation_rules:
 Copy `.github/workflows/vault-sync.yml` from `E:\Projects\KeyPick` into your `my-keys` repo.
 
 ```powershell
-# From inside my-keys/
+# From inside $HOME\.keypick\vaults\my-keys
 mkdir -p .github/workflows
 copy E:\Projects\KeyPick\.github\workflows\vault-sync.yml .github\workflows\
 git add .github .sops.yaml
@@ -294,6 +306,9 @@ Now every `cd` into that project auto-injects the keys. Every `cd` out removes t
 | Task | Command |
 |------|---------|
 | Interactive menu | `keypick` |
+| Show known vaults | `keypick vault list` |
+| Show current vault | `keypick vault current` |
+| Select current vault | `keypick vault select` |
 | Add keys to a group | `keypick add` |
 | Extract groups to .env | `keypick extract` |
 | List groups (values hidden) | `keypick list` |

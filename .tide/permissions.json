@@ -1,0 +1,26 @@
+{
+  "permissions": [
+    {
+      "createdAt": 1773933892827,
+      "decision": "allow",
+      "id": "perm-1773933892827-aob6wr",
+      "scope": "tool",
+      "toolName": "bash"
+    },
+    {
+      "createdAt": 1773936134103,
+      "decision": "allow",
+      "id": "perm-1773936134103-xmgtpp",
+      "scope": "tool",
+      "toolName": "write"
+    },
+    {
+      "createdAt": 1773937719007,
+      "decision": "allow",
+      "id": "perm-1773937719007-q0onrj",
+      "scope": "tool",
+      "toolName": "edit"
+    }
+  ],
+  "yoloMode": false
+}

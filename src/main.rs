@@ -39,6 +39,12 @@ enum Commands {
         groups: Vec<String>,
     },
 
+    /// Manage vault repository selection
+    Vault {
+        #[command(subcommand)]
+        sub: commands::vaults::VaultCommands,
+    },
+
     /// Set up KeyPick on this machine (install prerequisites, configure vault)
     Setup {
         #[command(subcommand)]
@@ -62,8 +68,11 @@ fn main() {
         return;
     }
 
-    // The `auto` subcommand is non-interactive (used by direnv) — no biometric gate
-    let needs_bio = !matches!(&cli.command, Some(Commands::Auto { .. }));
+    // Non-secret vault management and `auto` skip biometric auth.
+    let needs_bio = !matches!(
+        &cli.command,
+        Some(Commands::Auto { .. }) | Some(Commands::Vault { .. })
+    );
 
     if needs_bio {
         if let Err(e) = auth::verify() {
@@ -80,6 +89,7 @@ fn main() {
         Some(Commands::List) => commands::list::run(),
         Some(Commands::Copy) => commands::copy::run(),
         Some(Commands::Auto { groups }) => commands::auto_export::run(&groups),
+        Some(Commands::Vault { sub }) => commands::vaults::run(sub),
         Some(Commands::Setup { .. }) => unreachable!(),
         None => commands::interactive::run(),
     }

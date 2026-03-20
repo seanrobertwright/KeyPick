@@ -1,4 +1,5 @@
 use crate::commands::setup::utils;
+use crate::vault;
 use colored::*;
 use inquire::Password;
 use std::fs;
@@ -12,6 +13,8 @@ pub fn run(verbose: bool) {
 }
 
 fn run_inner(verbose: bool) -> Result<(), String> {
+    let vault_dir = vault::vault_dir();
+
     println!(
         "\n  {}",
         "A recovery key lets you regain access if you lose all your machines.".dimmed()
@@ -142,7 +145,7 @@ fn run_inner(verbose: bool) -> Result<(), String> {
     sp.finish_and_clear();
 
     if output.status.success() {
-        fs::write("recovery_key.age", &output.stdout)
+        fs::write(vault_dir.join("recovery_key.age"), &output.stdout)
             .map_err(|e| format!("Failed to write recovery_key.age: {}", e))?;
     } else {
         // Fallback: AGE_PASSPHRASE not supported, run interactively
@@ -160,6 +163,7 @@ fn run_inner(verbose: bool) -> Result<(), String> {
 
         let status = Command::new("age")
             .args(["-e", "-p", "-o", "recovery_key.age"])
+            .current_dir(&vault_dir)
             .stdin(Stdio::from(
                 fs::File::open(tmp.path())
                     .map_err(|e| format!("Failed to open temp key: {}", e))?,
@@ -185,24 +189,28 @@ fn run_inner(verbose: bool) -> Result<(), String> {
             "with your passphrase.",
         ]);
     }
-    if std::path::Path::new(".sops.yaml").exists() {
+    let sops_path = vault_dir.join(".sops.yaml");
+    let vault_path = vault_dir.join("vault.yaml");
+
+    if sops_path.exists() {
         let sp = utils::spinner("Adding recovery key to .sops.yaml...");
-        let content = fs::read_to_string(".sops.yaml")
+        let content = fs::read_to_string(&sops_path)
             .map_err(|e| format!("Failed to read .sops.yaml: {}", e))?;
 
         if !content.contains(&pubkey) {
             let updated = utils::add_recipient(&content, &pubkey)?;
-            fs::write(".sops.yaml", &updated)
+            fs::write(&sops_path, &updated)
                 .map_err(|e| format!("Failed to write .sops.yaml: {}", e))?;
         }
         sp.finish_and_clear();
         utils::done("Added recovery key to .sops.yaml recipients");
 
         // Re-encrypt vault
-        if std::path::Path::new("vault.yaml").exists() {
+        if vault_path.exists() {
             let sp = utils::spinner("Re-encrypting vault...");
             let _ = Command::new("sops")
                 .args(["updatekeys", "-y", "vault.yaml"])
+                .current_dir(&vault_dir)
                 .output();
             sp.finish_and_clear();
             utils::done("Vault re-encrypted with recovery key");
@@ -210,12 +218,12 @@ fn run_inner(verbose: bool) -> Result<(), String> {
 
         // Commit
         let sp = utils::spinner("Committing...");
-        let _ = utils::run_cmd("git", &["add", ".sops.yaml", "vault.yaml"]);
-        let _ = utils::run_cmd(
-            "git",
+        let _ = utils::run_git(&vault_dir.display().to_string(), &["add", ".sops.yaml", "vault.yaml"]);
+        let _ = utils::run_git(
+            &vault_dir.display().to_string(),
             &["commit", "-m", "feat: add recovery key to vault recipients"],
         );
-        let _ = utils::run_cmd("git", &["push"]);
+        let _ = utils::run_git(&vault_dir.display().to_string(), &["push"]);
         sp.finish_and_clear();
         utils::done("Changes committed and pushed");
     }
