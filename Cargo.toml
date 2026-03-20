@@ -13,7 +13,6 @@ path = "src/main.rs"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
-serde_json = "1.0"
 
 # Interactive CLI prompts
 inquire = "0.7"
