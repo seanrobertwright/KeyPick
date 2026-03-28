@@ -216,16 +216,12 @@ fn run_inner(verbose: bool) -> Result<(), String> {
             utils::done("Vault re-encrypted with recovery key");
         }
 
-        // Commit
-        let sp = utils::spinner("Committing...");
-        let _ = utils::run_git(&vault_dir.display().to_string(), &["add", ".sops.yaml", "vault.yaml"]);
-        let _ = utils::run_git(
-            &vault_dir.display().to_string(),
-            &["commit", "-m", "feat: add recovery key to vault recipients"],
-        );
-        let _ = utils::run_git(&vault_dir.display().to_string(), &["push"]);
-        sp.finish_and_clear();
-        utils::done("Changes committed and pushed");
+        // Commit and push
+        utils::git_commit_and_push(
+            ".",
+            &[".sops.yaml", "vault.yaml"],
+            "feat: add recovery key to vault recipients",
+        )?;
     }
 
     // Step 5: Storage instructions

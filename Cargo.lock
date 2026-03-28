@@ -1125,7 +1125,6 @@ dependencies = [
  "reqwest",
  "robius-authentication",
  "serde",
- "serde_json",
  "serde_yaml",
  "tempfile",
  "winapi",

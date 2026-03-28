@@ -183,16 +183,11 @@ fn run_inner(verbose: bool) -> Result<(), String> {
             "and re-encrypt the vault for all recipients.",
         ]);
     }
-    let sp = utils::spinner("Committing and pushing...");
-    let _ = utils::run_git(&vault_dir_str, &["add", ".github", ".sops.yaml"]);
-    let _ = utils::run_git(&vault_dir_str, &["commit", "-m", "feat: add GitHub Actions auto re-encryption"]);
-    let push_result = utils::run_git(&vault_dir_str, &["push"]);
-    sp.finish_and_clear();
-
-    match push_result {
-        Ok(_) => utils::done("Pushed to remote"),
-        Err(_) => utils::warn("Push failed - you can push manually later"),
-    }
+    utils::git_commit_and_push(
+        ".",
+        &[".github", ".sops.yaml"],
+        "feat: add GitHub Actions auto re-encryption",
+    )?;
 
     // Temp file is automatically cleaned up when dropped
     println!(
