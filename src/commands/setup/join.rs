@@ -112,21 +112,11 @@ pub fn run(public_key: &str, verbose: bool) -> Result<(), String> {
         }
 
         // Commit and push
-        let sp = utils::spinner("Committing changes...");
-        utils::run_git(&vault_dir, &["add", ".sops.yaml", "vault.yaml"])?;
-        utils::run_git(
+        utils::git_commit_and_push(
             &vault_dir,
-            &["commit", "-m", "feat: add new machine to vault recipients"],
+            &[".sops.yaml", "vault.yaml"],
+            "feat: add new machine to vault recipients",
         )?;
-        sp.finish_and_clear();
-        utils::done("Changes committed");
-
-        if utils::has_remote(&vault_dir) {
-            let sp = utils::spinner("Pushing...");
-            let _ = utils::run_git(&vault_dir, &["push"]);
-            sp.finish_and_clear();
-            utils::done("Pushed to remote");
-        }
     }
 
     println!(

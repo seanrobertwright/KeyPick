@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::env;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use inquire::Select;
 
 /// The in-memory representation of vault.yaml
@@ -396,38 +395,20 @@ pub fn save(vault: &Vault) {
     let vault_file = vault_dir.join(VAULT_FILE);
     let yaml_data = serde_yaml::to_string(vault).expect("Failed to serialize vault");
 
-    // Pipe unencrypted YAML into sops stdin → encrypted YAML out
-    let mut child = Command::new("sops")
-        .args([
-            "--encrypt",
-            "--input-type",
-            "yaml",
-            "--output-type",
-            "yaml",
-            "--filename-override",
-            VAULT_FILE,
-            "/dev/stdin",
-        ])
-        .current_dir(&vault_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    // Write plaintext to temp file, encrypt it, read back (cross-platform)
+    let tmp_path = "vault.yaml.tmp";
+    std::fs::write(tmp_path, &yaml_data).expect("Failed to write temp vault file");
+
+    let output = Command::new("sops")
+        .args(["--encrypt", "--input-type", "yaml", "--output-type", "yaml", tmp_path])
+        .output()
         .unwrap_or_else(|_| {
+            let _ = std::fs::remove_file(tmp_path);
             eprintln!("ERROR: Could not spawn sops for encryption.");
             crate::terminal::cleanup_and_exit(1);
         });
 
-    {
-        let stdin = child.stdin.as_mut().expect("Failed to open sops stdin");
-        stdin
-            .write_all(yaml_data.as_bytes())
-            .expect("Failed to write to sops stdin");
-    }
-
-    let output = child
-        .wait_with_output()
-        .expect("Failed to wait on sops process");
+    let _ = std::fs::remove_file(tmp_path);
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -448,6 +429,6 @@ pub fn keys_to_env(keys: &BTreeMap<String, String>) -> String {
 /// Format a group's keys as `export KEY='VALUE'` lines suitable for shell eval.
 pub fn keys_to_exports(keys: &BTreeMap<String, String>) -> String {
     keys.iter()
-        .map(|(k, v)| format!("export {}='{}'\n", k, v))
+        .map(|(k, v)| format!("export {}='{}'\n", k, v.replace('\'', "'\\''")))
         .collect()
 }

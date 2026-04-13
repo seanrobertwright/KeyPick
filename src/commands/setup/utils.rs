@@ -192,8 +192,42 @@ pub fn short_key(key: &str, len: usize) -> &str {
     key.get(..len).unwrap_or(key)
 }
 
+/// Git add, commit, and push with spinner. Push failures are warnings, not errors.
+pub fn git_commit_and_push(dir: &str, files: &[&str], message: &str) -> Result<(), String> {
+    let sp = spinner("Committing...");
+    let mut add_args = vec!["add"];
+    add_args.extend_from_slice(files);
+    run_git(dir, &add_args)?;
+    run_git(dir, &["commit", "-m", message])?;
+    sp.finish_and_clear();
+    done("Changes committed");
+
+    if has_remote(dir) {
+        let sp = spinner("Pushing...");
+        match run_git(dir, &["push"]) {
+            Ok(_) => {
+                sp.finish_and_clear();
+                done("Pushed to remote");
+            }
+            Err(_) => {
+                sp.finish_and_clear();
+                warn("Push failed — you can push manually later");
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Add an age public key to the recipient list in .sops.yaml content.
 pub fn add_recipient(content: &str, new_key: &str) -> Result<String, String> {
+    if !new_key.starts_with("age1") {
+        return Err(format!("Invalid age public key: {}", new_key));
+    }
+
+    if content.contains(new_key) {
+        return Ok(content.to_string());
+    }
+
     let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
     let mut last_key_idx = None;
 
