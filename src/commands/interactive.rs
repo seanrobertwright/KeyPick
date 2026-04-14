@@ -10,6 +10,8 @@ pub fn run() {
             "Add / Update a key group",
             "List vault contents",
             "Copy a key to clipboard",
+            "Push .env files to vault",
+            "Pull .env files from vault",
             "Exit",
         ],
     )
@@ -23,6 +25,8 @@ pub fn run() {
         "Add / Update a key group" => super::add::run(),
         "List vault contents" => super::list::run(),
         "Copy a key to clipboard" => super::copy::run(),
+        "Push .env files to vault" => super::env::push::run(),
+        "Pull .env files from vault" => super::env::pull::run(),
         _ => println!("{}", "Goodbye!".dimmed()),
     }
 }

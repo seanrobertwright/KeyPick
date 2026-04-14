@@ -1,4 +1,4 @@
-mod utils;
+pub mod utils;
 mod prerequisites;
 mod keygen;
 mod init;
