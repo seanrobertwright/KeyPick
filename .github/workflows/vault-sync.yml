@@ -1,13 +1,12 @@
 name: Sync Vault Recipients
 
-# Trigger whenever the SOPS config or the vault itself is updated.
-# This ensures that if you add or remove a machine's key, the vault is
-# automatically re-encrypted to match the new recipient list.
+# Trigger whenever the SOPS config, vault, or env files are updated.
 on:
   push:
     paths:
       - '.sops.yaml'
       - 'vault.yaml'
+      - 'envs/**'
 
 jobs:
   re-encrypt:
@@ -50,10 +49,22 @@ jobs:
           sops updatekeys -y vault.yaml
           echo "Vault successfully re-encrypted."
 
+      - name: Re-encrypt env files for all recipients
+        run: |
+          if [ -d "envs" ]; then
+            find envs -name ".env*" -type f | while read -r envfile; do
+              echo "Updating keys for: $envfile"
+              sops updatekeys -y "$envfile" || echo "Warning: failed to update $envfile"
+            done
+            echo "Env files re-encrypted."
+          else
+            echo "No envs directory found, skipping."
+          fi
+
       - name: Commit updated vault
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "ci: auto-sync vault recipients from .sops.yaml [skip ci]"
-          file_pattern: vault.yaml
+          file_pattern: "vault.yaml envs/"
           commit_user_name: "KeyPick Bot"
           commit_user_email: "actions@github.com"

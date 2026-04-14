@@ -45,6 +45,12 @@ enum Commands {
         sub: commands::vaults::VaultCommands,
     },
 
+    /// Manage per-project .env files in the vault
+    Env {
+        #[command(subcommand)]
+        sub: commands::env::EnvCommands,
+    },
+
     /// Set up KeyPick on this machine (install prerequisites, configure vault)
     Setup {
         #[command(subcommand)]
@@ -63,9 +69,20 @@ fn main() {
     let cli = Cli::parse();
 
     // Setup runs before vault exists — skip biometric gate
-    if let Some(Commands::Setup { sub, walkthrough }) = cli.command {
-        commands::setup::run(sub, walkthrough);
+    if let Some(Commands::Setup { sub, walkthrough }) = &cli.command {
+        commands::setup::run(sub.clone(), *walkthrough);
         return;
+    }
+
+    // Env::Status skips biometric; Push and Pull require it
+    if let Some(Commands::Env { sub }) = &cli.command {
+        match sub {
+            commands::env::EnvCommands::Status => {
+                commands::env::run(commands::env::EnvCommands::Status);
+                return;
+            }
+            _ => {} // fall through to biometric gate
+        }
     }
 
     // Non-secret vault management and `auto` skip biometric auth.
@@ -90,6 +107,7 @@ fn main() {
         Some(Commands::Copy) => commands::copy::run(),
         Some(Commands::Auto { groups }) => commands::auto_export::run(&groups),
         Some(Commands::Vault { sub }) => commands::vaults::run(sub),
+        Some(Commands::Env { sub }) => commands::env::run(sub),
         Some(Commands::Setup { .. }) => unreachable!(),
         None => commands::interactive::run(),
     }
