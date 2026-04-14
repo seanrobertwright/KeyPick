@@ -57,7 +57,7 @@ pub fn run(public_key: &str, verbose: bool) -> Result<(), String> {
     let sops_path = Path::new(&vault_dir).join(".sops.yaml");
     let sp = utils::spinner("Creating SOPS config...");
     let sops_content = format!(
-        "creation_rules:\n  - path_regex: vault\\.yaml$\n    age: >-\n      {}\n",
+        "creation_rules:\n  - path_regex: envs/.*\n    age: >-\n      {0}\n  - path_regex: vault\\.yaml$\n    age: >-\n      {0}\n",
         public_key
     );
     fs::write(&sops_path, &sops_content)
