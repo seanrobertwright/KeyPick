@@ -58,11 +58,16 @@ fn run_inner() -> Result<(), String> {
     // Find encrypted .env files in vault
     let entries: Vec<_> = fs::read_dir(&src_dir)
         .map_err(|e| format!("Failed to read {}: {}", src_dir.display(), e))?
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .starts_with(".env")
+        .filter_map(|e| {
+            let entry = e.ok()?;
+            if !entry.file_type().ok()?.is_file() {
+                return None;
+            }
+            if entry.file_name().to_string_lossy().starts_with(".env") {
+                Some(entry)
+            } else {
+                None
+            }
         })
         .collect();
 
