@@ -69,8 +69,8 @@ fn main() {
     let cli = Cli::parse();
 
     // Setup runs before vault exists — skip biometric gate
-    if let Some(Commands::Setup { sub, walkthrough }) = cli.command {
-        commands::setup::run(sub, walkthrough);
+    if let Some(Commands::Setup { sub, walkthrough }) = &cli.command {
+        commands::setup::run(sub.clone(), *walkthrough);
         return;
     }
 
