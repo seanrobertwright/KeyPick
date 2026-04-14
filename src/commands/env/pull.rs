@@ -63,11 +63,7 @@ fn run_inner() -> Result<(), String> {
             if !entry.file_type().ok()?.is_file() {
                 return None;
             }
-            if entry.file_name().to_string_lossy().starts_with(".env") {
-                Some(entry)
-            } else {
-                None
-            }
+            entry.file_name().to_string_lossy().starts_with(".env").then_some(entry)
         })
         .collect();
 
