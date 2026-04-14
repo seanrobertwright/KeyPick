@@ -44,6 +44,9 @@ dirs = "5"
 # Temp files for safe downloads
 tempfile = "3"
 
+# File pattern matching for .env* discovery
+glob = "0.3"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["wincon", "winuser"] }
 
