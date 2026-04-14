@@ -106,13 +106,17 @@ fn run_inner() -> Result<(), String> {
         }
     }
 
-    // Check if there are actual changes to commit
-    let status_output = setup_utils::run_git(
+    // Check if there are actual changes to commit (envs/ or .sops.yaml)
+    let envs_status = setup_utils::run_git(
         &vault_dir_str,
         &["status", "--porcelain", "envs/"],
     )?;
+    let sops_status = setup_utils::run_git(
+        &vault_dir_str,
+        &["status", "--porcelain", ".sops.yaml"],
+    ).unwrap_or_default();
 
-    if status_output.trim().is_empty() {
+    if envs_status.trim().is_empty() && sops_status.trim().is_empty() {
         setup_utils::done("No changes to push — vault is already up to date.");
         return Ok(());
     }
@@ -120,12 +124,6 @@ fn run_inner() -> Result<(), String> {
     // Git add, commit, push
     let envs_path = format!("envs/{}", project_id);
     let commit_msg = format!("update env: {}", project_id);
-
-    // Also commit .sops.yaml if it was modified
-    let sops_status = setup_utils::run_git(
-        &vault_dir_str,
-        &["status", "--porcelain", ".sops.yaml"],
-    ).unwrap_or_default();
 
     let mut files_to_add: Vec<&str> = vec![&envs_path];
     if !sops_status.trim().is_empty() {
