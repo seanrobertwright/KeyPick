@@ -1,5 +1,13 @@
 # Build artifacts
 /target/
+/rust/target/
+/rust/target-codex/
+/rust/target-codex*/
+
+# TypeScript build artifacts
+/ts/node_modules/
+/ts/dist/
+/ts/.bun/
 
 # Generated .env files (NEVER commit these)
 .env
