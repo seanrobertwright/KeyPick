@@ -1,8 +1,9 @@
 // Cross-platform biometric authentication — shells out to per-OS native helpers.
 //
-//   Windows → PowerShell + Windows.Security.Credentials.UI.UserConsentVerifier
-//   macOS   → swift + LocalAuthentication (LAContext)
-//   Linux   → pkexec (polkit) — prompts for the user's login credentials
+//   Windows  → PowerShell + Windows.Security.Credentials.UI.UserConsentVerifier
+//   macOS    → swift + LocalAuthentication (LAContext)
+//   WSL      → Windows Hello on the host via powershell.exe (WSL interop)
+//   Linux    → pkexec (polkit) — prompts for the user's login credentials
 //
 // Ported from rust/src/auth.rs (which uses the robius-authentication crate).
 
@@ -11,6 +12,7 @@ import { writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { isWsl } from "./wsl.ts";
 
 const TITLE = "KeyPick Vault";
 const REASON = "Verify your identity to access API keys";
@@ -22,6 +24,7 @@ export async function verify(): Promise<void> {
     case "darwin":
       return verifyMacOS();
     case "linux":
+      if (isWsl()) return verifyWindowsHelloFromWsl();
       return verifyLinux();
     default:
       throw new Error(`Unsupported platform: ${process.platform}`);
@@ -29,13 +32,12 @@ export async function verify(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Windows — Windows Hello via WinRT UserConsentVerifier
+// Windows Hello — shared between native Windows and WSL
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function verifyWindows(): Promise<void> {
-  // PowerShell script: load WinRT types, await the async consent verification.
-  // Uses WindowsRuntimeSystemExtensions to turn IAsyncOperation into a .NET Task.
-  const ps = `
+/** PowerShell script that awaits WinRT's UserConsentVerifier. Runs on the host. */
+function windowsHelloScript(): string {
+  return `
 $ErrorActionPreference = 'Stop'
 [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime] | Out-Null
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -51,7 +53,6 @@ function AwaitOp($op, $resultType) {
     $task.Result
 }
 
-# Check availability first (fast-fail if no biometric/PIN configured)
 $availType = [Windows.Security.Credentials.UI.UserConsentVerifierAvailability]
 $availOp = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()
 $availability = AwaitOp $availOp $availType
@@ -69,20 +70,48 @@ if ($result -eq $resultType::Verified) { exit 0 }
 [Console]::Error.WriteLine("Verification failed: $result")
 exit 1
 `;
+}
 
+function runWindowsHello(executable: string): void {
   const proc = spawnSync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+    executable,
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", windowsHelloScript()],
     { encoding: "utf8" },
   );
 
   if (proc.error) {
-    throw new Error(`Could not launch PowerShell for biometric verification: ${proc.error.message}`);
+    throw new Error(
+      `Could not launch ${executable} for biometric verification: ${proc.error.message}`,
+    );
   }
   if (proc.status === 0) return;
 
   const stderr = (proc.stderr ?? "").trim();
   throw new Error(stderr || `Windows Hello verification failed (exit ${proc.status})`);
+}
+
+async function verifyWindows(): Promise<void> {
+  runWindowsHello("powershell.exe");
+}
+
+/**
+ * WSL path: WSL interop exposes powershell.exe on PATH by default, which
+ * runs on the Windows host and can invoke Windows Hello normally.
+ * Falls back to polkit if interop is disabled (rare).
+ */
+async function verifyWindowsHelloFromWsl(): Promise<void> {
+  try {
+    runWindowsHello("powershell.exe");
+    return;
+  } catch (e) {
+    // If powershell.exe isn't available at all, fall through to polkit.
+    // If it ran but failed (user cancelled, no biometric configured),
+    // surface the error — don't silently downgrade to password auth.
+    const msg = (e as Error).message ?? "";
+    const interopMissing = msg.includes("ENOENT") || msg.includes("spawn");
+    if (!interopMissing) throw e;
+  }
+  await verifyLinux();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,9 +178,6 @@ exit(1)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function verifyLinux(): Promise<void> {
-  // pkexec triggers a polkit agent prompt (GUI or TTY depending on environment).
-  // Running /bin/true is a no-op — we only care about the auth result.
-  // On systems with fingerprint auth configured in PAM, polkit will honor it.
   return new Promise<void>((resolve, reject) => {
     const proc = spawn("pkexec", ["/bin/true"], { stdio: "inherit" });
 

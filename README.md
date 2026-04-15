@@ -467,6 +467,20 @@ cargo build --release
 # Binary is at rust/target/release/keypick(.exe)
 ```
 
+### WSL (Windows Subsystem for Linux)
+
+Both implementations run in WSL. WSL looks like Linux to the process, but:
+
+- **Biometric auth** routes through Windows Hello on the host via `powershell.exe` (exposed by WSL interop). You get the same fingerprint/PIN prompt as native Windows — no polkit required.
+- **`age` and `sops`** install as Linux binaries inside WSL. Your age keypair lives at `~/.config/sops/age/keys.txt` in the WSL distro, *not* the Windows host. Machines sharing the same vault still need distinct keys.
+- **Clipboard** works through WSL interop (`clip.exe` for the TS build; the Rust build may need WSLg or `xclip` depending on your WSL distro).
+
+Install via the Linux one-liner from inside your WSL shell:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.sh | sh
+```
+
 ### Prerequisites
 
 Both implementations need **Git** for vault syncing. The first-run `keypick setup` wizard installs `age` and `sops` automatically; if you'd rather do it by hand:

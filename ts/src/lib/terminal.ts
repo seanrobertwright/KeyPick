@@ -10,6 +10,7 @@
 
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { isWsl } from "./wsl.ts";
 
 function disableRawMode(): void {
   try {
@@ -63,7 +64,9 @@ export function installPanicHook(): void {
  * No-op on macOS and Linux.
  */
 export function restoreConsoleFocus(): void {
-  if (process.platform !== "win32") return;
+  const isWindows = process.platform === "win32";
+  const wsl = isWsl();
+  if (!isWindows && !wsl) return;
 
   // Uses Win32 APIs via Add-Type. GetConsoleWindow + GetAncestor(..., GA_ROOTOWNER)
   // because in Windows Terminal, GetConsoleWindow returns a hidden ConPTY pseudo-window.
@@ -90,6 +93,7 @@ Start-Sleep -Milliseconds 200
 Start-Sleep -Milliseconds 100
 `;
 
+  // WSL exposes powershell.exe via interop; same call shape works.
   try {
     spawnSync(
       "powershell.exe",
