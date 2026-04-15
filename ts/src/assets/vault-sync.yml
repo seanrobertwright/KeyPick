@@ -1,0 +1,70 @@
+name: Sync Vault Recipients
+
+# Trigger whenever the SOPS config, vault, or env files are updated.
+on:
+  push:
+    paths:
+      - '.sops.yaml'
+      - 'vault.yaml'
+      - 'envs/**'
+
+jobs:
+  re-encrypt:
+    name: Re-encrypt vault for updated recipients
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # Needed to push the re-encrypted vault
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install age
+        run: |
+          AGE_VERSION="1.2.0"
+          curl -LO "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz"
+          tar xzf age-v${AGE_VERSION}-linux-amd64.tar.gz
+          sudo mv age/age age/age-keygen /usr/local/bin/
+
+      - name: Install SOPS
+        run: |
+          SOPS_VERSION="3.9.1"
+          curl -LO "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+          sudo mv sops-v${SOPS_VERSION}.linux.amd64 /usr/local/bin/sops
+          sudo chmod +x /usr/local/bin/sops
+
+      - name: Import GitHub Actions age key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
+      - name: Re-encrypt vault for all recipients in .sops.yaml
+        run: |
+          sops updatekeys -y vault.yaml
+          echo "Vault successfully re-encrypted."
+
+      - name: Re-encrypt env files for all recipients
+        run: |
+          if [ -d "envs" ]; then
+            find envs -name ".env*" -type f | while read -r envfile; do
+              echo "Updating keys for: $envfile"
+              sops updatekeys -y "$envfile" || echo "Warning: failed to update $envfile"
+            done
+            echo "Env files re-encrypted."
+          else
+            echo "No envs directory found, skipping."
+          fi
+
+      - name: Commit updated vault
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: auto-sync vault recipients from .sops.yaml [skip ci]"
+          file_pattern: "vault.yaml envs/"
+          commit_user_name: "KeyPick Bot"
+          commit_user_email: "actions@github.com"
