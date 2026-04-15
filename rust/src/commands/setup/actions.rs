@@ -5,7 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-const VAULT_SYNC_WORKFLOW: &str = include_str!("../../../.github/workflows/vault-sync.yml");
+const VAULT_SYNC_WORKFLOW: &str = include_str!("../../../../.github/workflows/vault-sync.yml");
 
 pub fn run(verbose: bool) {
     if let Err(e) = run_inner(verbose) {

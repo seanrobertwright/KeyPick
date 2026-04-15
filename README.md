@@ -425,81 +425,58 @@ Your secrets are encrypted at rest and protected by biometric authentication. Th
 
 ## Installation
 
-### Prerequisites
+KeyPick ships two interchangeable implementations with identical CLI and feature parity:
 
-You need **Rust** (for building) and **Git** (for syncing). The setup wizard handles `age` and `sops` for you, but you can also install them manually.
+- **Rust** — a single ~5 MB native binary, no runtime required.
+- **TypeScript** — runs on [Bun](https://bun.sh), easier to hack on.
 
-### Windows
+Pick whichever fits your machine. The one-line installer prompts you for a choice.
+
+### One-line installer (recommended)
+
+**macOS / Linux:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.sh | sh
+```
+
+**Windows (PowerShell):**
 
 ```powershell
-# Install Rust (if not already installed)
-winget install Rustlang.Rustup
-
-# Clone and build
-git clone https://github.com/YOUR_USERNAME/KeyPick.git
-cd KeyPick
-cargo build --release
-
-# Add to PATH (choose one):
-# Option A: Copy to a directory already on PATH
-Copy-Item .\target\release\keypick.exe "$env:USERPROFILE\.local\bin\"
-
-# Option B: Copy next to other system tools
-Copy-Item .\target\release\keypick.exe C:\Windows\System32\
-
-# Verify
-keypick --version
+irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps1 | iex
 ```
 
-### macOS
+### Direct install (TypeScript)
+
+If you already have Bun installed:
 
 ```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Clone and build
-git clone https://github.com/YOUR_USERNAME/KeyPick.git
-cd KeyPick
-cargo build --release
-
-# Add to PATH
-cp target/release/keypick ~/.local/bin/
-# or
-sudo cp target/release/keypick /usr/local/bin/
-
-# Verify
-keypick --version
+bun install -g keypick
 ```
 
-### Linux
+### Direct install (Rust)
+
+Prebuilt binaries for each platform are attached to every GitHub release. Download the archive matching your OS/arch from the [Releases page](https://github.com/seanrobertwright/KeyPick/releases), extract it, and put `keypick` on your `PATH`.
+
+Or build from source:
 
 ```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install build dependencies (Debian/Ubuntu)
-sudo apt install -y build-essential pkg-config libdbus-1-dev
-
-# Clone and build
-git clone https://github.com/YOUR_USERNAME/KeyPick.git
-cd KeyPick
+git clone https://github.com/seanrobertwright/KeyPick.git
+cd KeyPick/rust
 cargo build --release
-
-# Add to PATH
-cp target/release/keypick ~/.local/bin/
-
-# Verify
-keypick --version
+# Binary is at rust/target/release/keypick(.exe)
 ```
 
-### Manual Prerequisite Installation
+### Prerequisites
 
-If you prefer to install `age` and `sops` manually instead of letting the wizard do it:
+Both implementations need **Git** for vault syncing. The first-run `keypick setup` wizard installs `age` and `sops` automatically; if you'd rather do it by hand:
 
 | Tool | Windows | macOS | Linux |
 |------|---------|-------|-------|
 | **age** | [Download .zip](https://github.com/FiloSottile/age/releases) | `brew install age` | `apt install age` |
 | **sops** | [Download .exe](https://github.com/getsops/sops/releases) | `brew install sops` | `apt install sops` |
+
+The Rust build also needs `build-essential`, `pkg-config`, and `libdbus-1-dev` on Debian/Ubuntu if you're compiling from source.
 
 ---
 
