@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-ci-${{ hashFiles('rust/Cargo.lock') }}
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: cargo check
+        working-directory: rust
+        run: cargo check --locked --all-targets
+
+      - name: cargo clippy (warnings only)
+        working-directory: rust
+        run: cargo clippy --locked --all-targets
+
+      - name: cargo test
+        working-directory: rust
+        run: cargo test --locked
+
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: ts
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: ts
+        run: bun run typecheck
+
+      - name: Smoke test (--help)
+        working-directory: ts
+        run: bun run src/main.ts --help
+
+  workflow-asset-sync:
+    name: Workflow asset sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify ts/src/assets/vault-sync.yml matches .github/workflows/vault-sync.yml
+        run: |
+          if ! diff -q .github/workflows/vault-sync.yml ts/src/assets/vault-sync.yml; then
+            echo "::error::ts/src/assets/vault-sync.yml is out of sync with .github/workflows/vault-sync.yml."
+            echo "Run: cp .github/workflows/vault-sync.yml ts/src/assets/vault-sync.yml"
+            exit 1
+          fi
