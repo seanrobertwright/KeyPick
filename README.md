@@ -27,8 +27,9 @@ New to KeyPick? Start with [TUTORIAL.md](TUTORIAL.md). It walks through installa
 KeyPick is a terminal-based secrets manager designed for developers who work across multiple machines. Instead of copying `.env` files around, texting yourself API keys, or storing them in plaintext notes, KeyPick gives you:
 
 - **One encrypted vault** synced via a private Git repo
-- **Biometric authentication** (Windows Hello, Touch ID, Linux polkit) before any secret is decrypted
+- **Biometric authentication** (Windows Hello, Touch ID, Linux polkit, WSL→Hello via interop) before any secret is decrypted
 - **Per-machine age keys** so compromising one machine doesn't compromise them all
+- **Two implementations, same CLI** — pick Rust (single native binary) or TypeScript (runs on Bun). Vaults are interchangeable
 - **A guided setup wizard** that installs prerequisites, generates keys, and configures everything for you
 - **Shell integration** via direnv for automatic environment variable injection
 
@@ -148,35 +149,68 @@ Secrets are only ever unencrypted in memory during a `keypick` session. They are
 
 ## Tech Stack
 
+KeyPick ships two interchangeable implementations with identical CLI, features, and on-disk format. Pick the one that fits your machine — they produce byte-compatible vaults, so you can even run Rust on one laptop and TypeScript on another against the same repo.
+
+**Shared across both:**
+
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Language** | Rust | Performance, safety, cross-platform binaries |
 | **Encryption** | [age](https://github.com/FiloSottile/age) | Modern, audited, no-config file encryption |
 | **Secret management** | [SOPS](https://github.com/getsops/sops) | Encrypted file editing with multiple recipients |
-| **Biometrics** | [robius-authentication](https://crates.io/crates/robius-authentication) | Windows Hello, Touch ID, Linux polkit |
-| **CLI framework** | [clap](https://crates.io/crates/clap) | Argument parsing with derive macros |
-| **Interactive prompts** | [inquire](https://crates.io/crates/inquire) | Select menus, text input, confirmations |
-| **Progress indicators** | [indicatif](https://crates.io/crates/indicatif) | Download progress bars, operation spinners |
-| **HTTP downloads** | [reqwest](https://crates.io/crates/reqwest) | Auto-download prerequisites from GitHub |
 | **Sync backbone** | Git + GitHub | Encrypted vault synced across machines |
 | **CI automation** | GitHub Actions | Auto re-encryption when recipients change |
+| **Biometrics** | Per-OS native APIs | Windows Hello, Touch ID, polkit, WSL→Hello via interop |
+
+**Rust build** (`rust/`):
+
+| Component | Technology |
+|-----------|-----------|
+| Language | Rust (single ~5 MB native binary) |
+| Biometrics | [robius-authentication](https://crates.io/crates/robius-authentication) + `powershell.exe` bridge for WSL |
+| CLI framework | [clap](https://crates.io/crates/clap) |
+| Interactive prompts | [inquire](https://crates.io/crates/inquire) |
+| Progress indicators | [indicatif](https://crates.io/crates/indicatif) |
+| HTTP downloads | [reqwest](https://crates.io/crates/reqwest) |
+
+**TypeScript build** (`ts/`):
+
+| Component | Technology |
+|-----------|-----------|
+| Runtime | [Bun](https://bun.sh) ≥ 1.1 |
+| Biometrics | PowerShell + WinRT (Windows / WSL), Swift + LocalAuthentication (macOS), pkexec (Linux) |
+| CLI framework | [commander](https://www.npmjs.com/package/commander) |
+| Interactive prompts | [@inquirer/prompts](https://www.npmjs.com/package/@inquirer/prompts) |
+| Progress indicators | [ora](https://www.npmjs.com/package/ora) |
+| YAML | [yaml](https://www.npmjs.com/package/yaml) |
+| Clipboard | [clipboardy](https://www.npmjs.com/package/clipboardy) |
 
 ---
 
 ## Quick Start
 
-The fastest way to get running is the setup wizard. It handles everything.
+### 1. Install
 
-### Automated Setup (Recommended)
+Pick one. Both end up as a `keypick` command on your PATH.
 
 ```bash
-# 1. Clone and build KeyPick
-git clone https://github.com/YOUR_USERNAME/KeyPick.git
-cd KeyPick
-cargo build --release
+# macOS / Linux / WSL — one-line installer (prompts for Rust or TypeScript)
+curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.sh | sh
+```
 
-# 2. Run the setup wizard
-./target/release/keypick setup
+```powershell
+# Windows PowerShell
+irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps1 | iex
+```
+
+```bash
+# Or, if you already have Bun — TypeScript direct install
+bun install -g keypick
+```
+
+### 2. Run the setup wizard
+
+```bash
+keypick setup
 ```
 
 The wizard will:
@@ -189,7 +223,7 @@ The wizard will:
 For a guided experience with detailed explanations of every step, use walkthrough mode:
 
 ```bash
-./target/release/keypick setup --walkthrough
+keypick setup --walkthrough
 ```
 
 ---
@@ -852,7 +886,7 @@ KeyPick/
 
 ### `sops` or `age` not found after setup
 
-The setup wizard installs binaries to `~/.local/bin/` or next to `keypick.exe`. If your shell can't find them:
+The setup wizard installs binaries to `~/.local/bin/` or next to the `keypick` executable. If your shell can't find them:
 
 ```bash
 # Check where they were installed
@@ -965,22 +999,50 @@ setx KEYPICK_HOME "$env:USERPROFILE\OneDrive\Documents\KeyPick"
 
 Contributions are welcome! Here's how to get started:
 
+### Repo layout
+
+```
+KeyPick/
+├── rust/              # Rust implementation (Cargo project)
+│   ├── src/
+│   ├── Cargo.toml
+│   └── vendor/
+├── ts/                # TypeScript implementation (Bun project)
+│   ├── src/
+│   │   ├── lib/       # vault, auth, terminal, wsl
+│   │   ├── commands/
+│   │   └── main.ts
+│   └── package.json
+├── install.sh         # Unix one-line installer
+├── install.ps1        # Windows one-line installer
+└── .github/workflows/
+    ├── release.yml    # Tag-triggered build + npm publish
+    └── vault-sync.yml # Auto re-encryption for vault repos
+```
+
+Both implementations are kept at feature parity. If you change user-facing behaviour in one, mirror it in the other.
+
 ### Development Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/KeyPick.git
+git clone https://github.com/seanrobertwright/KeyPick.git
 cd KeyPick
-cargo build
-cargo check  # Fast compilation check
+
+# Rust
+cd rust && cargo check && cargo build --release
+
+# TypeScript
+cd ts && bun install && bun run typecheck && bun run src/main.ts --help
 ```
 
 ### Guidelines
 
 1. **Fork the repo** and create your branch from `master`
 2. **Write clear commit messages** following [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`, `docs:`)
-3. **Test your changes** — make sure `cargo build --release` succeeds with zero warnings
-4. **Keep it simple** — KeyPick values simplicity over feature count
-5. **Security first** — never log, print, or write secrets to disk unless the user explicitly requests it
+3. **Test your changes** — make sure `cargo build --release` (in `rust/`) and `bun run typecheck` (in `ts/`) both succeed with zero warnings
+4. **Keep parity** — if you add a feature to one implementation, port it to the other in the same PR
+5. **Keep it simple** — KeyPick values simplicity over feature count
+6. **Security first** — never log, print, or write secrets to disk unless the user explicitly requests it
 
 ### Submitting Changes
 
@@ -992,8 +1054,8 @@ cargo check  # Fast compilation check
 
 ### Reporting Issues
 
-- Use [GitHub Issues](https://github.com/YOUR_USERNAME/KeyPick/issues) to report bugs or request features
-- Include your OS, Rust version (`rustc --version`), and steps to reproduce
+- Use [GitHub Issues](https://github.com/seanrobertwright/KeyPick/issues) to report bugs or request features
+- Include your OS, which implementation you're running (Rust or TypeScript), and the version (`keypick --version`)
 
 ---
 
