@@ -65,9 +65,20 @@ async function runInner(): Promise<void> {
   for (const src of envFiles) {
     const name = path.basename(src);
     const dest = path.join(destDir, name);
+    // --filename-override makes SOPS match creation_rules against the
+    // vault-relative destination (envs/<projectId>/<name>) rather than the
+    // caller's .env path, which won't match the `envs/.*` rule.
+    const filenameOverride = path.relative(vaultDir, dest).replace(/\\/g, "/");
     const result = spawnSync(
       "sops",
-      ["--encrypt", "--input-type", "dotenv", "--output-type", "dotenv", "--output", dest, src],
+      [
+        "--encrypt",
+        "--input-type", "dotenv",
+        "--output-type", "dotenv",
+        "--filename-override", filenameOverride,
+        "--output", dest,
+        src,
+      ],
       { encoding: "buffer" },
     );
     if (result.error) {

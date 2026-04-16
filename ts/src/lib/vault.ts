@@ -435,9 +435,18 @@ export async function save(vault: VaultData): Promise<void> {
   const tmpPath = path.join(dir, "vault.yaml.tmp");
   writeFileSync(tmpPath, yamlData);
 
+  // --filename-override makes SOPS match creation_rules against vault.yaml
+  // instead of vault.yaml.tmp (which won't match a `vault\.yaml$` rule).
   const result = spawnSync(
     "sops",
-    ["--encrypt", "--input-type", "yaml", "--output-type", "yaml", "--output", vaultFile, tmpPath],
+    [
+      "--encrypt",
+      "--input-type", "yaml",
+      "--output-type", "yaml",
+      "--filename-override", VAULT_FILE,
+      "--output", vaultFile,
+      tmpPath,
+    ],
     { encoding: "buffer" },
   );
 
