@@ -1,13 +1,13 @@
 {
   "name": "keypick",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cross-platform, biometric-secured API key vault manager powered by SOPS + age",
   "type": "module",
   "bin": {
-    "keypick": "./src/main.ts"
+    "keypick": "./dist/keypick.js"
   },
   "files": [
-    "src",
+    "dist",
     "README.md",
     "LICENSE"
   ],
@@ -17,7 +17,9 @@
   "scripts": {
     "dev": "bun run src/main.ts",
     "start": "bun run src/main.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/main.ts --target bun --outfile dist/keypick.js --banner \"#!/usr/bin/env bun\"",
+    "prepublishOnly": "bun run typecheck && bun run build"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.3.0",
