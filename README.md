@@ -484,6 +484,22 @@ KeyPick needs **Git** for vault syncing and **Bun** as its runtime. The first-ru
 | **age** | [Download .zip](https://github.com/FiloSottile/age/releases) | `brew install age` | `apt install age` |
 | **sops** | [Download .exe](https://github.com/getsops/sops/releases) | `brew install sops` | `apt install sops` |
 
+### Uninstalling
+
+**macOS / Linux / WSL:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/uninstall.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/uninstall.ps1 | iex
+```
+
+Removes the KeyPick bundle, shim, any legacy installs (Bun global or cargo-era Rust), and — after confirmation — your config dir (`~/.keypick/`, including cloned vault repos). Prompts separately before deleting your age private key; if you have no recovery key or other machines, deleting it makes your vault contents permanently inaccessible.
+
 ---
 
 ## Usage
