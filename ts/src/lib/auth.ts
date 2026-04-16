@@ -72,9 +72,12 @@ exit 1
 }
 
 function runWindowsHello(executable: string): void {
+  // NOTE: do not pass -NonInteractive. On some Windows 11 builds it prevents
+  // UserConsentVerifier's WinRT async from ever surfacing its GUI, hanging
+  // the spawnSync call silently.
   const proc = spawnSync(
     executable,
-    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", windowsHelloScript()],
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", windowsHelloScript()],
     { encoding: "utf8" },
   );
 
