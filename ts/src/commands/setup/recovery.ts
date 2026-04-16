@@ -124,7 +124,7 @@ async function runInner(verbose: boolean): Promise<void> {
   const sp3 = utils.spinner("Encrypting recovery key with passphrase...");
   const encRes = spawnSync("age", ["-e", "-p"], {
     env: { ...process.env, AGE_PASSPHRASE: passphrase },
-    input: keyMaterial,
+    input: Buffer.from(keyMaterial),
     encoding: "buffer",
   });
   sp3.stop();
@@ -145,7 +145,7 @@ async function runInner(verbose: boolean): Promise<void> {
 
     const interactiveRes = spawnSync("age", ["-e", "-p", "-o", "recovery_key.age"], {
       cwd: vaultDir,
-      input: keyMaterial,
+      input: Buffer.from(keyMaterial),
       stdio: ["pipe", "inherit", "inherit"],
     });
     if (interactiveRes.error) throw new Error(`age failed: ${interactiveRes.error.message}`);
