@@ -34,14 +34,130 @@ export async function verify(): Promise<void> {
 // Windows Hello — shared between native Windows and WSL
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** PowerShell script that awaits WinRT's UserConsentVerifier. Runs on the host. */
+/** PowerShell script that awaits WinRT's UserConsentVerifier. Runs on the host.
+ *
+ * Also starts a background STA thread that pulls the Hello/CredentialUI dialog
+ * onto the current virtual desktop if CredentialUIBroker places it elsewhere
+ * (common when the terminal and the broker's last session differ).
+ */
 function windowsHelloScript(): string {
+  const reason = REASON.replace(/'/g, "''");
   return `
 $ErrorActionPreference = 'Stop'
+
+Add-Type -Language CSharp @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class W {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int maxCount);
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int maxCount);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("ole32.dll")] public static extern int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
+    [DllImport("ole32.dll")] public static extern void CoUninitialize();
+}
+
+[ComImport]
+[Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IVirtualDesktopManager {
+    [PreserveSig] int IsWindowOnCurrentVirtualDesktop(IntPtr h, out int onCurrent);
+    [PreserveSig] int GetWindowDesktopId(IntPtr h, out Guid desktopId);
+    [PreserveSig] int MoveWindowToDesktop(IntPtr h, [MarshalAs(UnmanagedType.LPStruct)] Guid desktopId);
+}
+
+// Concrete wrapper so PowerShell can invoke instance methods directly;
+// PS cannot dispatch against an IUnknown-only COM interface without this.
+public class VDM {
+    private IVirtualDesktopManager mgr;
+    public VDM() {
+        mgr = (IVirtualDesktopManager)Activator.CreateInstance(
+            Type.GetTypeFromCLSID(new Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a"))
+        );
+    }
+    public Guid GetWindowDesktopId(IntPtr h) {
+        Guid g; int hr = mgr.GetWindowDesktopId(h, out g);
+        if (hr != 0) throw new System.ComponentModel.Win32Exception(hr);
+        return g;
+    }
+    public bool IsOnCurrent(IntPtr h) {
+        int r; int hr = mgr.IsWindowOnCurrentVirtualDesktop(h, out r);
+        if (hr != 0) throw new System.ComponentModel.Win32Exception(hr);
+        return r != 0;
+    }
+    public void MoveTo(IntPtr h, Guid id) {
+        int hr = mgr.MoveWindowToDesktop(h, id);
+        if (hr != 0) throw new System.ComponentModel.Win32Exception(hr);
+    }
+}
+"@ | Out-Null
+
+# Capture the virtual desktop id of the user's terminal (current foreground).
+$termHwnd = [W]::GetForegroundWindow()
+$myDesktop = [Guid]::Empty
+$canMove = $false
+try {
+    $vdm = [VDM]::new()
+    $myDesktop = $vdm.GetWindowDesktopId($termHwnd)
+    if ($myDesktop -ne [Guid]::Empty) { $canMove = $true }
+} catch {}
+
+# Background poller: for up to 10s, find the Hello dialog and move it to our
+# desktop if CredentialUIBroker placed it elsewhere.
+if ($canMove) {
+    $poller = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
+        param($target)
+        [W]::CoInitializeEx([IntPtr]::Zero, 2) | Out-Null  # COINIT_APARTMENTTHREADED
+        try {
+            $vdm2 = [VDM]::new()
+            $deadline = (Get-Date).AddSeconds(10)
+            $seen = @{}
+            while ((Get-Date) -lt $deadline) {
+                $cb = [W+EnumWindowsProc]{
+                    param($h, $l)
+                    if (-not [W]::IsWindowVisible($h)) { return $true }
+                    if ($seen.ContainsKey($h)) { return $true }
+                    $cls = New-Object System.Text.StringBuilder 256
+                    [W]::GetClassName($h, $cls, 256) | Out-Null
+                    $c = $cls.ToString()
+                    $ttl = New-Object System.Text.StringBuilder 256
+                    [W]::GetWindowText($h, $ttl, 256) | Out-Null
+                    $t = $ttl.ToString()
+                    $isCandidate = ($c -eq 'Credential Dialog Xaml Host') -or
+                                   (($c -eq 'ApplicationFrameWindow' -or $c -eq 'Windows.UI.Core.CoreWindow') -and
+                                    ($t -match 'Windows Security|Windows Hello'))
+                    if ($isCandidate) {
+                        try {
+                            if (-not $vdm2.IsOnCurrent($h)) {
+                                $vdm2.MoveTo($h, $target)
+                            }
+                            [W]::SetForegroundWindow($h) | Out-Null
+                        } catch {}
+                        $seen[$h] = $true
+                    }
+                    return $true
+                }
+                [W]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+                Start-Sleep -Milliseconds 150
+            }
+        } finally {
+            [W]::CoUninitialize()
+        }
+    })
+    $poller.SetApartmentState([System.Threading.ApartmentState]::STA)
+    $poller.IsBackground = $true
+    $poller.Start($myDesktop)
+}
+
+# WinRT bootstrap
 [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime] | Out-Null
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
-# Generic AsTask<T>(IAsyncOperation<T>) trampoline
 $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
     $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
 })[0]
@@ -53,8 +169,7 @@ function AwaitOp($op, $resultType) {
 }
 
 $availType = [Windows.Security.Credentials.UI.UserConsentVerifierAvailability]
-$availOp = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()
-$availability = AwaitOp $availOp $availType
+$availability = AwaitOp ([Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()) $availType
 
 if ($availability -ne $availType::Available) {
     [Console]::Error.WriteLine("Biometric/PIN not available: $availability")
@@ -62,8 +177,7 @@ if ($availability -ne $availType::Available) {
 }
 
 $resultType = [Windows.Security.Credentials.UI.UserConsentVerificationResult]
-$verifyOp = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('${REASON.replace(/'/g, "''")}')
-$result = AwaitOp $verifyOp $resultType
+$result = AwaitOp ([Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('${reason}')) $resultType
 
 if ($result -eq $resultType::Verified) { exit 0 }
 [Console]::Error.WriteLine("Verification failed: $result")
