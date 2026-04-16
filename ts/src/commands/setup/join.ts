@@ -1,6 +1,7 @@
 // Join an existing vault: clone repo, add this machine's key, re-encrypt.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { ensureDir } from "../../lib/fs.ts";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
@@ -115,7 +116,7 @@ export async function run(publicKey: string, verbose: boolean): Promise<void> {
 async function joinWithGh(verbose: boolean): Promise<string> {
   const vaultHome = vault.vaultsHomeDir();
   try {
-    mkdirSync(vaultHome, { recursive: true });
+    ensureDir(vaultHome);
   } catch (e) {
     throw new Error(`Failed to create ${vaultHome}: ${(e as Error).message}`);
   }
@@ -192,7 +193,7 @@ async function joinManual(verbose: boolean): Promise<string> {
 
     const vaultHome = vault.vaultsHomeDir();
     try {
-      mkdirSync(vaultHome, { recursive: true });
+      ensureDir(vaultHome);
     } catch (e) {
       throw new Error(`Failed to create ${vaultHome}: ${(e as Error).message}`);
     }

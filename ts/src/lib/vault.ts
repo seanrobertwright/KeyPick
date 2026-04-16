@@ -1,6 +1,7 @@
 // Vault: on-disk SOPS-encrypted YAML, in-memory representation, and path resolution.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { ensureDir } from "./fs.ts";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -122,7 +123,7 @@ function vaultAllowsLocalKey(dir: string, localKey: string): boolean {
 export function rememberVaultDir(dir: string): void {
   const configDir = appConfigDir();
   try {
-    mkdirSync(configDir, { recursive: true });
+    ensureDir(configDir);
   } catch (e) {
     throw new Error(
       `Failed to create ${configDir}: ${(e as Error).message}. Set KEYPICK_HOME to a writable directory if needed.`,

@@ -1,6 +1,7 @@
 // Check for (and install) age + sops prerequisites.
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { ensureDir } from "../../lib/fs.ts";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -95,7 +96,7 @@ async function installAge(version: string): Promise<void> {
   const ageSrc = findBinary(ageDir, tmp, `age${ext}`);
   const keygenSrc = findBinary(ageDir, tmp, `age-keygen${ext}`);
 
-  mkdirSync(installDir, { recursive: true });
+  ensureDir(installDir);
   copyFileSync(ageSrc, path.join(installDir, `age${ext}`));
   copyFileSync(keygenSrc, path.join(installDir, `age-keygen${ext}`));
 
@@ -121,7 +122,7 @@ async function installSops(version: string): Promise<void> {
   const installDir = utils.installDir();
   const data = await downloadFile(url, filename);
 
-  mkdirSync(installDir, { recursive: true });
+  ensureDir(installDir);
   const ext = process.platform === "win32" ? ".exe" : "";
   const dest = path.join(installDir, `sops${ext}`);
   writeFileSync(dest, data);

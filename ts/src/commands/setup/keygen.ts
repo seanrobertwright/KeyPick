@@ -1,6 +1,7 @@
 // Ensure an age keypair exists; generate if missing. Returns the public key.
 
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, renameSync } from "node:fs";
+import { ensureDir } from "../../lib/fs.ts";
 import chalk from "chalk";
 import { confirm } from "@inquirer/prompts";
 import * as utils from "./utils.ts";
@@ -58,7 +59,7 @@ export async function run(verbose: boolean): Promise<string> {
   try {
     const keyDir = utils.ageKeyDir();
     try {
-      mkdirSync(keyDir, { recursive: true });
+      ensureDir(keyDir);
     } catch (e) {
       throw new Error(`Failed to create ${keyDir}: ${(e as Error).message}`);
     }

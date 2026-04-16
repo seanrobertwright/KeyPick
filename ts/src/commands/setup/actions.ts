@@ -1,6 +1,7 @@
 // Set up GitHub Actions auto re-encryption workflow.
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { ensureDir } from "../../lib/fs.ts";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -186,7 +187,7 @@ async function runInner(verbose: boolean): Promise<void> {
   const sp4 = utils.spinner("Installing workflow file...");
   try {
     const workflow = loadWorkflow();
-    mkdirSync(path.join(vaultDir, ".github", "workflows"), { recursive: true });
+    ensureDir(path.join(vaultDir, ".github", "workflows"));
     writeFileSync(
       path.join(vaultDir, ".github", "workflows", "vault-sync.yml"),
       workflow,

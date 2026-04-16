@@ -1,6 +1,6 @@
 // `keypick env push` — encrypt and push .env files to the vault.
 
-import { mkdirSync } from "node:fs";
+import { ensureDir } from "../../lib/fs.ts";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -54,7 +54,7 @@ async function runInner(): Promise<void> {
 
   const destDir = envUtils.envsDir(vaultDir, projectId);
   try {
-    mkdirSync(destDir, { recursive: true });
+    ensureDir(destDir);
   } catch (e) {
     throw new Error(`Failed to create ${destDir}: ${(e as Error).message}`);
   }

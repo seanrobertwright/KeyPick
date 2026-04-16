@@ -1,6 +1,7 @@
 // Shared setup/env command utilities.
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { ensureDir } from "../../lib/fs.ts";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -120,7 +121,7 @@ export function installDir(): string {
   if (home) {
     const localBin = path.join(home, ".local", "bin");
     try {
-      mkdirSync(localBin, { recursive: true });
+      ensureDir(localBin);
     } catch {
       // best-effort
     }
