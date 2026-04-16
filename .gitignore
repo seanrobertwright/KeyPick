@@ -1,6 +1,7 @@
 # TypeScript build artifacts
 /ts/node_modules/
 /ts/dist/
+/ts/dist-pkg/
 /ts/.bun/
 
 # Generated .env files (NEVER commit these)

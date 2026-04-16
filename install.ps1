@@ -3,11 +3,16 @@
 # Usage:
 #   irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps1 | iex
 #
-# Runs `bun install -g keypick` (requires Bun).
+# Downloads the latest release zip, extracts the Bun bundle to
+# %USERPROFILE%\.local\share\keypick, and drops a keypick.cmd shim at
+# %USERPROFILE%\.local\bin.
+# Requires Bun: https://bun.sh
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'seanrobertwright/KeyPick'
+$Repo = if ($env:KEYPICK_REPO) { $env:KEYPICK_REPO } else { 'seanrobertwright/KeyPick' }
+$ShareDir = if ($env:KEYPICK_SHARE_DIR) { $env:KEYPICK_SHARE_DIR } else { Join-Path $env:USERPROFILE '.local\share\keypick' }
+$BinDir   = if ($env:KEYPICK_BIN_DIR)   { $env:KEYPICK_BIN_DIR }   else { Join-Path $env:USERPROFILE '.local\bin' }
 
 function Info($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Warn($m) { Write-Host "!   $m" -ForegroundColor Yellow }
@@ -17,16 +22,63 @@ function Install-KeyPick {
     if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
         Die 'Bun is not installed. Install it first: https://bun.sh'
     }
-    Info 'Running: bun install -g keypick'
-    bun install -g keypick
-    if ($LASTEXITCODE -ne 0) { Die 'bun install failed.' }
+
+    Info 'Fetching latest release tag...'
+    $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+    $tag = $release.tag_name
+    if (-not $tag) { Die 'Could not determine latest release tag.' }
+    Info "Latest tag: $tag"
+
+    $asset = "keypick-$tag.zip"
+    $url = "https://github.com/$Repo/releases/download/$tag/$asset"
+    Info "Downloading $url"
+
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    try {
+        $zipPath = Join-Path $tmp $asset
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+        Expand-Archive -Path $zipPath -DestinationPath $tmp -Force
+
+        $bundleDir = Join-Path $tmp "keypick-$tag"
+        if (-not (Test-Path (Join-Path $bundleDir 'keypick.js'))) {
+            Die "keypick.js missing from release archive."
+        }
+
+        if (-not (Test-Path $ShareDir)) { New-Item -ItemType Directory -Path $ShareDir -Force | Out-Null }
+        if (-not (Test-Path $BinDir))   { New-Item -ItemType Directory -Path $BinDir -Force | Out-Null }
+
+        Copy-Item (Join-Path $bundleDir 'keypick.js')   (Join-Path $ShareDir 'keypick.js')   -Force
+        Copy-Item (Join-Path $bundleDir 'package.json') (Join-Path $ShareDir 'package.json') -Force
+
+        $bundlePath = Join-Path $ShareDir 'keypick.js'
+        $quote = [char]34
+        $shimContent = "@echo off`r`nbun {0}{1}{0} %*`r`n" -f $quote, $bundlePath
+        $shimPath = Join-Path $BinDir 'keypick.cmd'
+        Set-Content -Path $shimPath -Value $shimContent -Encoding ASCII -NoNewline
+
+        Info "Installed to $ShareDir (shim: $shimPath)"
+    }
+    finally {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+    }
+
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($userPath -notlike "*$BinDir*") {
+        Warn "$BinDir is not on your user PATH."
+        $response = Read-Host 'Add it now? (y/N)'
+        if ($response -match '^[Yy]') {
+            [Environment]::SetEnvironmentVariable('Path', "$userPath;$BinDir", 'User')
+            Info 'PATH updated. Restart your shell to pick it up.'
+        }
+    }
 }
 
 function Install-Skill {
     Write-Host ''
     Write-Host 'Install the KeyPick Claude Code skill?'
-    Write-Host '  G) Global  — available in every project (~\.claude\skills\keypick)'
-    Write-Host '  P) Project — current directory only (.claude\skills\keypick)'
+    Write-Host '  G) Global  - available in every project (~\.claude\skills\keypick)'
+    Write-Host '  P) Project - current directory only (.claude\skills\keypick)'
     Write-Host '  S) Skip'
     Write-Host ''
     $scope = Read-Host 'Enter G, P, or S'
@@ -35,7 +87,7 @@ function Install-Skill {
         'G' { $skillDest = Join-Path $env:USERPROFILE '.claude\skills\keypick' }
         'P' { $skillDest = Join-Path (Get-Location) '.claude\skills\keypick' }
         'S' { Info 'Skipping skill installation.'; return }
-        default { Warn "Unrecognised choice '$scope' — skipping skill installation."; return }
+        default { Warn "Unrecognised choice '$scope' - skipping skill installation."; return }
     }
 
     # Prefer a local copy (dev/TS install); fall back to fetching from GitHub.

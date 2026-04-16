@@ -9,27 +9,24 @@ permissions:
   contents: write
 
 jobs:
-  # ───────────────────────────────────────────────────────────────────────────
-  # Publish the TypeScript package to npm
-  # ───────────────────────────────────────────────────────────────────────────
-  ts-publish:
-    name: Publish TS package to npm
+  build-and-release:
+    name: Build bundle and create GitHub Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          bun-version: latest
 
       - name: Install dependencies
         working-directory: ts
-        run: npm install
+        run: bun install --frozen-lockfile
 
       - name: Typecheck
         working-directory: ts
-        run: npm run typecheck
+        run: bun run typecheck
 
       - name: Verify package version matches tag
         working-directory: ts
@@ -41,28 +38,40 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to npm
+      - name: Build bundle
         working-directory: ts
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bun run build
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # Create the GitHub Release
-  # ───────────────────────────────────────────────────────────────────────────
-  release:
-    name: Create GitHub Release
-    needs: [ts-publish]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create release
+      - name: Package release artifacts
+        working-directory: ts
+        run: |
+          OUT="keypick-${GITHUB_REF_NAME}"
+          mkdir -p "dist-pkg/$OUT"
+          cp dist/keypick.js "dist-pkg/$OUT/"
+          cp package.json "dist-pkg/$OUT/"
+          cp ../LICENSE "dist-pkg/$OUT/"
+          cp ../README.md "dist-pkg/$OUT/"
+          cd dist-pkg
+          tar czf "${OUT}.tar.gz" "$OUT"
+          zip -qr "${OUT}.zip" "$OUT"
+          ls -la
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          files: ts/dist-pkg/keypick-*.*
           generate_release_notes: true
           body: |
             ## Install
 
-            **TypeScript (via Bun):**
+            Requires [Bun](https://bun.sh).
+
+            **macOS / Linux / WSL:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | sh
             ```
-            bun install -g keypick@${{ github.ref_name }}
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/${{ github.repository }}/master/install.ps1 | iex
             ```
