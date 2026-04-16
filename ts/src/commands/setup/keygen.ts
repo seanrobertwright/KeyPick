@@ -1,5 +1,4 @@
 // Ensure an age keypair exists; generate if missing. Returns the public key.
-// Ported from rust/src/commands/setup/keygen.rs.
 
 import { existsSync, mkdirSync, renameSync } from "node:fs";
 import chalk from "chalk";

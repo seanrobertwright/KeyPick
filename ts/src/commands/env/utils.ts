@@ -1,5 +1,4 @@
 // Shared helpers for `keypick env` subcommands.
-// Ported from rust/src/commands/env/utils.rs.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";

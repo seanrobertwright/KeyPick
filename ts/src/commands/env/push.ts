@@ -1,7 +1,6 @@
 // `keypick env push` — encrypt and push .env files to the vault.
-// Ported from rust/src/commands/env/push.rs.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -68,7 +67,7 @@ async function runInner(): Promise<void> {
     const dest = path.join(destDir, name);
     const result = spawnSync(
       "sops",
-      ["--encrypt", "--input-type", "dotenv", "--output-type", "dotenv", src],
+      ["--encrypt", "--input-type", "dotenv", "--output-type", "dotenv", "--output", dest, src],
       { encoding: "buffer" },
     );
     if (result.error) {
@@ -76,12 +75,7 @@ async function runInner(): Promise<void> {
       throw new Error(`Failed to run sops: ${result.error.message}`);
     }
     if (result.status === 0) {
-      try {
-        writeFileSync(dest, result.stdout!);
-      } catch (e) {
-        sp.stop();
-        throw new Error(`Failed to write ${dest}: ${(e as Error).message}`);
-      }
+      // output written directly to dest via --output flag
     } else {
       const stderr = (result.stderr?.toString("utf8") ?? "").trim();
       errors.push(`${name}: ${stderr}`);

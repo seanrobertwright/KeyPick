@@ -1,5 +1,4 @@
 // Set up GitHub Actions auto re-encryption workflow.
-// Ported from rust/src/commands/setup/actions.rs.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

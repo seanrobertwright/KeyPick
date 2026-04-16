@@ -1,5 +1,4 @@
 // Create a brand-new vault repository and initial commit.
-// Ported from rust/src/commands/setup/init.rs.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";

@@ -1,5 +1,4 @@
 // Non-interactive export for shell evaluation (used by direnv).
-// Ported from rust/src/commands/auto_export.rs.
 //
 // Prints `export KEY='VALUE'` lines to stdout for each group provided.
 // No biometric gate — authentication is handled by the calling shell context.

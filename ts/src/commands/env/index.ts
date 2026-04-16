@@ -1,5 +1,4 @@
 // `keypick env` subcommand dispatcher.
-// Ported from rust/src/commands/env/mod.rs.
 
 import * as push from "./push.ts";
 import * as pull from "./pull.ts";

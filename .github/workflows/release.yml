@@ -10,76 +10,6 @@ permissions:
 
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
-  # Build and attach prebuilt Rust binaries to the GitHub Release
-  # ───────────────────────────────────────────────────────────────────────────
-  rust-build:
-    name: Build Rust (${{ matrix.name }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux-x86_64
-            runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            ext: ''
-          - name: macos-x86_64
-            runner: macos-13
-            target: x86_64-apple-darwin
-            ext: ''
-          - name: macos-aarch64
-            runner: macos-14
-            target: aarch64-apple-darwin
-            ext: ''
-          - name: windows-x86_64
-            runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            ext: '.exe'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo registry + build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust/target
-          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('rust/Cargo.lock') }}
-
-      - name: Build release binary
-        working-directory: rust
-        run: cargo build --release --locked --target ${{ matrix.target }}
-
-      - name: Package artifact
-        shell: bash
-        working-directory: rust
-        run: |
-          BIN="keypick${{ matrix.ext }}"
-          OUT="keypick-${GITHUB_REF_NAME}-${{ matrix.name }}"
-          mkdir -p "dist/$OUT"
-          cp "target/${{ matrix.target }}/release/$BIN" "dist/$OUT/"
-          cp ../LICENSE "dist/$OUT/"
-          cp ../README.md "dist/$OUT/"
-          cd dist
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "${OUT}.zip" "$OUT" >/dev/null
-          else
-            tar czf "${OUT}.tar.gz" "$OUT"
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-${{ matrix.name }}
-          path: rust/dist/keypick-*.*
-
-  # ───────────────────────────────────────────────────────────────────────────
   # Publish the TypeScript package to npm
   # ───────────────────────────────────────────────────────────────────────────
   ts-publish:
@@ -118,24 +48,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Attach all Rust artifacts to the GitHub Release
+  # Create the GitHub Release
   # ───────────────────────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [rust-build, ts-publish]
+    needs: [ts-publish]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all Rust artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: rust-*
-          path: artifacts
-          merge-multiple: true
-
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
           generate_release_notes: true
           body: |
             ## Install
@@ -143,11 +65,4 @@ jobs:
             **TypeScript (via Bun):**
             ```
             bun install -g keypick@${{ github.ref_name }}
-            ```
-
-            **Rust (prebuilt binary):** download the archive for your platform below, extract, and move `keypick` onto your `PATH`.
-
-            **Rust (from source):**
-            ```
-            cargo install --git https://github.com/${{ github.repository }} --tag ${{ github.ref_name }} --path rust
             ```

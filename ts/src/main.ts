@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 // KeyPick — Cross-platform API key vault manager (TypeScript port).
-// Ported from rust/src/main.rs.
 
 import { Command } from "commander";
 import chalk from "chalk";

@@ -5,7 +5,6 @@
 //   WSL      → Windows Hello on the host via powershell.exe (WSL interop)
 //   Linux    → pkexec (polkit) — prompts for the user's login credentials
 //
-// Ported from rust/src/auth.rs (which uses the robius-authentication crate).
 
 import { spawnSync, spawn } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";

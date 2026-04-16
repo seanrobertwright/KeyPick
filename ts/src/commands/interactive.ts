@@ -1,5 +1,4 @@
 // Full interactive menu (no subcommand given — just run `keypick`).
-// Ported from rust/src/commands/interactive.rs.
 
 import chalk from "chalk";
 import { select } from "@inquirer/prompts";

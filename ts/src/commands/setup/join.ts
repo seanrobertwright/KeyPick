@@ -1,5 +1,4 @@
 // Join an existing vault: clone repo, add this machine's key, re-encrypt.
-// Ported from rust/src/commands/setup/join.rs.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

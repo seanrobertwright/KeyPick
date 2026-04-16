@@ -67,11 +67,11 @@ KeyPick is now designed around this model.
 
 ## 3. Install KeyPick
 
-KeyPick ships two interchangeable implementations — a Rust native binary and a TypeScript build that runs on [Bun](https://bun.sh). Both produce identical vaults; pick whichever you prefer.
+KeyPick is a TypeScript CLI that runs on [Bun](https://bun.sh). Install Bun first if you don't have it.
 
 ### One-line installer (recommended)
 
-The installer prompts you to choose Rust or TypeScript and installs the chosen variant as `keypick` on your `PATH`.
+Installs `keypick` onto your `PATH`.
 
 **macOS / Linux / WSL:**
 
@@ -87,7 +87,7 @@ irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps
 keypick --version
 ```
 
-### Direct install — TypeScript
+### Direct install
 
 If you already have Bun:
 
@@ -96,26 +96,11 @@ bun install -g keypick
 keypick --version
 ```
 
-### Direct install — Rust
-
-Prebuilt binaries for each platform are attached to every [GitHub release](https://github.com/seanrobertwright/KeyPick/releases). Download the archive matching your OS/arch, extract it, and put `keypick` on your `PATH`.
-
-To build from source instead:
-
-```bash
-git clone https://github.com/seanrobertwright/KeyPick.git
-cd KeyPick/rust
-cargo install --path . --force
-keypick --version
-```
-
-(Install `rustup` first if Rust isn't on the machine.)
-
 KeyPick's setup wizard handles `age` and `sops` for you, so you do not need to preinstall them unless you want manual control.
 
 ### WSL note
 
-Inside WSL, run the macOS/Linux installer and pick either implementation. KeyPick detects WSL and routes biometric prompts to Windows Hello on the host via `powershell.exe` (exposed by WSL interop) — so you get the real fingerprint/PIN prompt, not a polkit fallback. Your age keypair lives at `~/.config/sops/age/keys.txt` inside the WSL distro and is treated as a separate "machine" from native Windows.
+Inside WSL, run the macOS/Linux installer. KeyPick detects WSL and routes biometric prompts to Windows Hello on the host via `powershell.exe` (exposed by WSL interop) — so you get the real fingerprint/PIN prompt, not a polkit fallback. Your age keypair lives at `~/.config/sops/age/keys.txt` inside the WSL distro and is treated as a separate "machine" from native Windows.
 
 ### Windows note: `KEYPICK_HOME`
 

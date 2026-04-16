@@ -1,5 +1,4 @@
 // `keypick env pull` — decrypt .env files from the vault to the current project.
-// Ported from rust/src/commands/env/pull.rs.
 
 import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";

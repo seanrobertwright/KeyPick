@@ -1,5 +1,4 @@
 // `keypick setup` — full wizard + subcommands.
-// Ported from rust/src/commands/setup/mod.rs.
 
 import chalk from "chalk";
 import { confirm, select } from "@inquirer/prompts";

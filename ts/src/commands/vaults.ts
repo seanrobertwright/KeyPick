@@ -1,5 +1,4 @@
 // Vault repository management subcommands.
-// Ported from rust/src/commands/vaults.rs.
 
 import chalk from "chalk";
 import * as vault from "../lib/vault.ts";

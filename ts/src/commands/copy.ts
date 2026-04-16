@@ -1,5 +1,4 @@
 // Copy a single key's value directly to clipboard — nothing written to disk.
-// Ported from rust/src/commands/copy.rs.
 
 import chalk from "chalk";
 import clipboard from "clipboardy";

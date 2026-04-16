@@ -1,5 +1,4 @@
 // Interactive wizard: add or update a key group in the vault.
-// Ported from rust/src/commands/add.rs.
 
 import chalk from "chalk";
 import { select, input, confirm } from "@inquirer/prompts";

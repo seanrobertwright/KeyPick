@@ -1,5 +1,4 @@
 // Shared setup/env command utilities.
-// Ported from rust/src/commands/setup/utils.rs.
 
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";

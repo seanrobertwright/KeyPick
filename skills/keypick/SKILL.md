@@ -71,7 +71,7 @@ keypick --version 2>/dev/null || echo "not installed"
 
 If not installed, direct the user to run the installer:
 - Windows: `irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps1 | iex`
-- macOS/Linux: *(Rust binary or `bun install -g keypick`)*
+- macOS/Linux: `bun install -g keypick`
 
 If installed but not set up: `keypick setup`
 

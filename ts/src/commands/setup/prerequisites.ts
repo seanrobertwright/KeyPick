@@ -1,5 +1,4 @@
 // Check for (and install) age + sops prerequisites.
-// Ported from rust/src/commands/setup/prerequisites.rs.
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

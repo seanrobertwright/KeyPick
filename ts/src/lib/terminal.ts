@@ -1,5 +1,4 @@
 // Terminal state management.
-// Ported from rust/src/terminal.rs.
 //
 // Two responsibilities:
 //   1. Restore the terminal to a sane state on exit / uncaught error
@@ -30,7 +29,7 @@ export function cleanupAndExit(code: number): never {
 
 /**
  * Install handlers so uncaught errors and SIGINT don't leave the terminal
- * stuck in raw mode. Equivalent to the panic hook in the Rust version.
+ * stuck in raw mode.
  */
 export function installPanicHook(): void {
   process.on("uncaughtException", (err) => {

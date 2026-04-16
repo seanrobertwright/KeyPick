@@ -1,5 +1,4 @@
 // `keypick env status` — compare local .env files with vault copies.
-// Ported from rust/src/commands/env/status.rs.
 
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";

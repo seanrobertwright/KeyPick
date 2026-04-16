@@ -121,17 +121,10 @@ git push -u origin main
 
 ## Phase 3: Deploy keypick
 
-### 8. Build the binary (if not already done)
+### 8. Install keypick
 
 ```powershell
-cd E:\Projects\KeyPick
-cargo build --release
-```
-
-### 9. Put it on your PATH
-
-```powershell
-Copy-Item .\target\release\keypick.exe C:\Windows\System32\
+bun install -g keypick
 ```
 
 Verify:

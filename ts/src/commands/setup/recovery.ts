@@ -1,5 +1,4 @@
 // Generate a passphrase-protected recovery key for emergency vault access.
-// Ported from rust/src/commands/setup/recovery.rs.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

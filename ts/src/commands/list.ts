@@ -1,5 +1,4 @@
 // List all groups and key names (values hidden).
-// Ported from rust/src/commands/list.rs.
 
 import chalk from "chalk";
 import * as vault from "../lib/vault.ts";

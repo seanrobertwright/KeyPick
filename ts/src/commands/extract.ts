@@ -1,5 +1,4 @@
 // Interactive multi-select: pick which groups to write to .env
-// Ported from rust/src/commands/extract.rs.
 
 import { writeFileSync } from "node:fs";
 import chalk from "chalk";

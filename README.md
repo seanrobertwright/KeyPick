@@ -29,7 +29,6 @@ KeyPick is a terminal-based secrets manager designed for developers who work acr
 - **One encrypted vault** synced via a private Git repo
 - **Biometric authentication** (Windows Hello, Touch ID, Linux polkit, WSL→Hello via interop) before any secret is decrypted
 - **Per-machine age keys** so compromising one machine doesn't compromise them all
-- **Two implementations, same CLI** — pick Rust (single native binary) or TypeScript (runs on Bun). Vaults are interchangeable
 - **A guided setup wizard** that installs prerequisites, generates keys, and configures everything for you
 - **Shell integration** via direnv for automatic environment variable injection
 
@@ -149,40 +148,19 @@ Secrets are only ever unencrypted in memory during a `keypick` session. They are
 
 ## Tech Stack
 
-KeyPick ships two interchangeable implementations with identical CLI, features, and on-disk format. Pick the one that fits your machine — they produce byte-compatible vaults, so you can even run Rust on one laptop and TypeScript on another against the same repo.
-
-**Shared across both:**
-
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
+| **Runtime** | [Bun](https://bun.sh) ≥ 1.1 | TypeScript runtime |
 | **Encryption** | [age](https://github.com/FiloSottile/age) | Modern, audited, no-config file encryption |
 | **Secret management** | [SOPS](https://github.com/getsops/sops) | Encrypted file editing with multiple recipients |
 | **Sync backbone** | Git + GitHub | Encrypted vault synced across machines |
 | **CI automation** | GitHub Actions | Auto re-encryption when recipients change |
-| **Biometrics** | Per-OS native APIs | Windows Hello, Touch ID, polkit, WSL→Hello via interop |
-
-**Rust build** (`rust/`):
-
-| Component | Technology |
-|-----------|-----------|
-| Language | Rust (single ~5 MB native binary) |
-| Biometrics | [robius-authentication](https://crates.io/crates/robius-authentication) + `powershell.exe` bridge for WSL |
-| CLI framework | [clap](https://crates.io/crates/clap) |
-| Interactive prompts | [inquire](https://crates.io/crates/inquire) |
-| Progress indicators | [indicatif](https://crates.io/crates/indicatif) |
-| HTTP downloads | [reqwest](https://crates.io/crates/reqwest) |
-
-**TypeScript build** (`ts/`):
-
-| Component | Technology |
-|-----------|-----------|
-| Runtime | [Bun](https://bun.sh) ≥ 1.1 |
-| Biometrics | PowerShell + WinRT (Windows / WSL), Swift + LocalAuthentication (macOS), pkexec (Linux) |
-| CLI framework | [commander](https://www.npmjs.com/package/commander) |
-| Interactive prompts | [@inquirer/prompts](https://www.npmjs.com/package/@inquirer/prompts) |
-| Progress indicators | [ora](https://www.npmjs.com/package/ora) |
-| YAML | [yaml](https://www.npmjs.com/package/yaml) |
-| Clipboard | [clipboardy](https://www.npmjs.com/package/clipboardy) |
+| **Biometrics** | PowerShell + WinRT (Windows / WSL), Swift + LocalAuthentication (macOS), pkexec (Linux) |
+| **CLI framework** | [commander](https://www.npmjs.com/package/commander) |
+| **Interactive prompts** | [@inquirer/prompts](https://www.npmjs.com/package/@inquirer/prompts) |
+| **Progress indicators** | [ora](https://www.npmjs.com/package/ora) |
+| **YAML** | [yaml](https://www.npmjs.com/package/yaml) |
+| **Clipboard** | [clipboardy](https://www.npmjs.com/package/clipboardy) |
 
 ---
 
@@ -190,10 +168,10 @@ KeyPick ships two interchangeable implementations with identical CLI, features, 
 
 ### 1. Install
 
-Pick one. Both end up as a `keypick` command on your PATH.
+Installs `keypick` onto your PATH. Requires [Bun](https://bun.sh).
 
 ```bash
-# macOS / Linux / WSL — one-line installer (prompts for Rust or TypeScript)
+# macOS / Linux / WSL — one-line installer
 curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.sh | sh
 ```
 
@@ -459,12 +437,7 @@ Your secrets are encrypted at rest and protected by biometric authentication. Th
 
 ## Installation
 
-KeyPick ships two interchangeable implementations with identical CLI and feature parity:
-
-- **Rust** — a single ~5 MB native binary, no runtime required.
-- **TypeScript** — runs on [Bun](https://bun.sh), easier to hack on.
-
-Pick whichever fits your machine. The one-line installer prompts you for a choice.
+KeyPick is a TypeScript CLI that runs on [Bun](https://bun.sh).
 
 ### One-line installer (recommended)
 
@@ -480,7 +453,7 @@ curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/ins
 irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps1 | iex
 ```
 
-### Direct install (TypeScript)
+### Direct install
 
 If you already have Bun installed:
 
@@ -488,26 +461,13 @@ If you already have Bun installed:
 bun install -g keypick
 ```
 
-### Direct install (Rust)
-
-Prebuilt binaries for each platform are attached to every GitHub release. Download the archive matching your OS/arch from the [Releases page](https://github.com/seanrobertwright/KeyPick/releases), extract it, and put `keypick` on your `PATH`.
-
-Or build from source:
-
-```bash
-git clone https://github.com/seanrobertwright/KeyPick.git
-cd KeyPick/rust
-cargo build --release
-# Binary is at rust/target/release/keypick(.exe)
-```
-
 ### WSL (Windows Subsystem for Linux)
 
-Both implementations run in WSL. WSL looks like Linux to the process, but:
+KeyPick runs in WSL. WSL looks like Linux to the process, but:
 
 - **Biometric auth** routes through Windows Hello on the host via `powershell.exe` (exposed by WSL interop). You get the same fingerprint/PIN prompt as native Windows — no polkit required.
 - **`age` and `sops`** install as Linux binaries inside WSL. Your age keypair lives at `~/.config/sops/age/keys.txt` in the WSL distro, *not* the Windows host. Machines sharing the same vault still need distinct keys.
-- **Clipboard** works through WSL interop (`clip.exe` for the TS build; the Rust build may need WSLg or `xclip` depending on your WSL distro).
+- **Clipboard** works through WSL interop via `clip.exe`.
 
 Install via the Linux one-liner from inside your WSL shell:
 
@@ -517,14 +477,12 @@ curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/ins
 
 ### Prerequisites
 
-Both implementations need **Git** for vault syncing. The first-run `keypick setup` wizard installs `age` and `sops` automatically; if you'd rather do it by hand:
+KeyPick needs **Git** for vault syncing and **Bun** as its runtime. The first-run `keypick setup` wizard installs `age` and `sops` automatically; if you'd rather do it by hand:
 
 | Tool | Windows | macOS | Linux |
 |------|---------|-------|-------|
 | **age** | [Download .zip](https://github.com/FiloSottile/age/releases) | `brew install age` | `apt install age` |
 | **sops** | [Download .exe](https://github.com/getsops/sops/releases) | `brew install sops` | `apt install sops` |
-
-The Rust build also needs `build-essential`, `pkg-config`, and `libdbus-1-dev` on Debian/Ubuntu if you're compiling from source.
 
 ---
 
@@ -851,33 +809,37 @@ rm temp_key.txt
 
 ```
 KeyPick/
-├── Cargo.toml
 ├── .sops.yaml                          # Template for secrets repos
 ├── .github/
 │   └── workflows/
 │       └── vault-sync.yml              # Template: auto re-encryption CI
-└── src/
-    ├── main.rs                         # Entry point, CLI routing
-    ├── auth.rs                         # Biometric authentication
-    ├── vault.rs                        # SOPS encrypt/decrypt, data model
-    └── commands/
-        ├── mod.rs
-        ├── add.rs                      # keypick add
-        ├── extract.rs                  # keypick extract
-        ├── list.rs                     # keypick list
-        ├── copy.rs                     # keypick copy
-        ├── auto_export.rs              # keypick auto
-        ├── interactive.rs              # No-argument menu mode
-        ├── vaults.rs                   # keypick vault
-        └── setup/
-            ├── mod.rs                  # Setup wizard orchestrator
-            ├── utils.rs                # Shared helpers (spinners, downloads, platform)
-            ├── prerequisites.rs        # age/sops auto-installer
-            ├── keygen.rs               # Age key generation
-            ├── init.rs                 # First machine flow
-            ├── join.rs                 # Additional machine flow
-            ├── actions.rs              # GitHub Actions wizard
-            └── recovery.rs             # Recovery key wizard
+└── ts/
+    ├── package.json
+    └── src/
+        ├── main.ts                     # Entry point, CLI routing
+        ├── lib/
+        │   ├── auth.ts                 # Biometric authentication
+        │   ├── vault.ts                # SOPS encrypt/decrypt, data model
+        │   ├── terminal.ts             # Terminal state + cleanup
+        │   └── wsl.ts                  # WSL detection + Hello bridge
+        └── commands/
+            ├── add.ts                  # keypick add
+            ├── extract.ts              # keypick extract
+            ├── list.ts                 # keypick list
+            ├── copy.ts                 # keypick copy
+            ├── auto_export.ts          # keypick auto
+            ├── interactive.ts          # No-argument menu mode
+            ├── vaults.ts               # keypick vault
+            ├── env/                    # keypick env push/pull/status
+            └── setup/
+                ├── index.ts            # Setup wizard orchestrator
+                ├── utils.ts            # Shared helpers (spinners, downloads, platform)
+                ├── prerequisites.ts    # age/sops auto-installer
+                ├── keygen.ts           # Age key generation
+                ├── init.ts             # First machine flow
+                ├── join.ts             # Additional machine flow
+                ├── actions.ts          # GitHub Actions wizard
+                └── recovery.ts         # Recovery key wizard
 ```
 
 ---
@@ -1003,10 +965,6 @@ Contributions are welcome! Here's how to get started:
 
 ```
 KeyPick/
-├── rust/              # Rust implementation (Cargo project)
-│   ├── src/
-│   ├── Cargo.toml
-│   └── vendor/
 ├── ts/                # TypeScript implementation (Bun project)
 │   ├── src/
 │   │   ├── lib/       # vault, auth, terminal, wsl
@@ -1016,33 +974,27 @@ KeyPick/
 ├── install.sh         # Unix one-line installer
 ├── install.ps1        # Windows one-line installer
 └── .github/workflows/
-    ├── release.yml    # Tag-triggered build + npm publish
+    ├── release.yml    # Tag-triggered npm publish
     └── vault-sync.yml # Auto re-encryption for vault repos
 ```
-
-Both implementations are kept at feature parity. If you change user-facing behaviour in one, mirror it in the other.
 
 ### Development Setup
 
 ```bash
 git clone https://github.com/seanrobertwright/KeyPick.git
-cd KeyPick
-
-# Rust
-cd rust && cargo check && cargo build --release
-
-# TypeScript
-cd ts && bun install && bun run typecheck && bun run src/main.ts --help
+cd KeyPick/ts
+bun install
+bun run typecheck
+bun run src/main.ts --help
 ```
 
 ### Guidelines
 
 1. **Fork the repo** and create your branch from `master`
 2. **Write clear commit messages** following [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`, `docs:`)
-3. **Test your changes** — make sure `cargo build --release` (in `rust/`) and `bun run typecheck` (in `ts/`) both succeed with zero warnings
-4. **Keep parity** — if you add a feature to one implementation, port it to the other in the same PR
-5. **Keep it simple** — KeyPick values simplicity over feature count
-6. **Security first** — never log, print, or write secrets to disk unless the user explicitly requests it
+3. **Test your changes** — make sure `bun run typecheck` (in `ts/`) succeeds with zero warnings
+4. **Keep it simple** — KeyPick values simplicity over feature count
+5. **Security first** — never log, print, or write secrets to disk unless the user explicitly requests it
 
 ### Submitting Changes
 
@@ -1055,7 +1007,7 @@ cd ts && bun install && bun run typecheck && bun run src/main.ts --help
 ### Reporting Issues
 
 - Use [GitHub Issues](https://github.com/seanrobertwright/KeyPick/issues) to report bugs or request features
-- Include your OS, which implementation you're running (Rust or TypeScript), and the version (`keypick --version`)
+- Include your OS and the version (`keypick --version`)
 
 ---
 

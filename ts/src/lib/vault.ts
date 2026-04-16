@@ -1,5 +1,4 @@
 // Vault: on-disk SOPS-encrypted YAML, in-memory representation, and path resolution.
-// Ported from rust/src/vault.rs.
 
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
@@ -351,7 +350,6 @@ async function resolveVaultDir(): Promise<string> {
 
 /**
  * Resolve the vault directory or exit cleanly with the error message.
- * Mirrors the `cleanup_and_exit(1)` behaviour of the Rust version.
  */
 async function resolveVaultDirOrExit(): Promise<string> {
   try {
@@ -438,7 +436,7 @@ export async function save(vault: VaultData): Promise<void> {
 
   const result = spawnSync(
     "sops",
-    ["--encrypt", "--input-type", "yaml", "--output-type", "yaml", tmpPath],
+    ["--encrypt", "--input-type", "yaml", "--output-type", "yaml", "--output", vaultFile, tmpPath],
     { encoding: "buffer" },
   );
 
@@ -458,8 +456,6 @@ export async function save(vault: VaultData): Promise<void> {
     console.error(`SOPS encryption failed:\n${stderr}`);
     terminal.cleanupAndExit(1);
   }
-
-  writeFileSync(vaultFile, result.stdout!);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -468,7 +464,7 @@ export async function save(vault: VaultData): Promise<void> {
 
 /**
  * Format a group's keys as KEY=VALUE lines suitable for a .env file.
- * Keys are emitted sorted (parity with Rust's BTreeMap ordering).
+ * Keys are emitted in sorted order.
  */
 export function keysToEnv(keys: Record<string, string>): string {
   return Object.keys(keys)
@@ -479,7 +475,7 @@ export function keysToEnv(keys: Record<string, string>): string {
 
 /**
  * Format a group's keys as `export KEY='VALUE'` lines suitable for shell eval.
- * Keys are emitted sorted (parity with Rust's BTreeMap ordering).
+ * Keys are emitted in sorted order.
  */
 export function keysToExports(keys: Record<string, string>): string {
   return Object.keys(keys)
