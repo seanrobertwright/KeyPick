@@ -64,7 +64,14 @@ jobs:
           body: |
             ## Install
 
-            Requires [Bun](https://bun.sh).
+            Requires [Bun](https://bun.sh) + Node 18+ (for `npx`).
+
+            **Cross-platform (recommended):**
+            ```bash
+            npx github:${{ github.repository }} install
+            ```
+
+            Shell-script fallbacks:
 
             **macOS / Linux / WSL:**
             ```bash

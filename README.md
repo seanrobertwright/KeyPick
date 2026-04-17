@@ -168,21 +168,23 @@ Secrets are only ever unencrypted in memory during a `keypick` session. They are
 
 ### 1. Install
 
-Installs `keypick` onto your PATH. Requires [Bun](https://bun.sh).
+Installs `keypick` onto your PATH via an interactive, cross-platform wizard. Requires [Bun](https://bun.sh) and Node 18+ (`npx` ships with Node).
 
 ```bash
-# macOS / Linux / WSL — one-line installer
+# macOS / Linux / Windows / WSL
+npx github:seanrobertwright/KeyPick install
+```
+
+Shell-script alternatives (no Node/`npx` required):
+
+```bash
+# macOS / Linux / WSL
 curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.sh | sh
 ```
 
 ```powershell
 # Windows PowerShell
 irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/install.ps1 | iex
-```
-
-```bash
-# Or, if you already have Bun — TypeScript direct install
-bun install -g keypick
 ```
 
 ### 2. Run the setup wizard
@@ -437,9 +439,25 @@ Your secrets are encrypted at rest and protected by biometric authentication. Th
 
 ## Installation
 
-KeyPick is a TypeScript CLI that runs on [Bun](https://bun.sh).
+KeyPick is a TypeScript CLI that runs on [Bun](https://bun.sh). The recommended installer is a cross-platform interactive wizard; shell-script installers are available for systems without Node.
 
-### One-line installer (recommended)
+### `npx` installer (recommended)
+
+One command on every platform — macOS, Linux, Windows, WSL:
+
+```bash
+npx github:seanrobertwright/KeyPick install
+```
+
+The wizard walks you through each step with a short explanation of *why*, fetches the latest release from GitHub, drops the bundle at `~/.local/share/keypick` and a shim at `~/.local/bin/keypick`, checks your PATH, and optionally installs the Claude Code skill (global or project scope). Requires **Node 18+** (`npx` ships with Node) and **Bun** on your PATH.
+
+To uninstall:
+
+```bash
+npx github:seanrobertwright/KeyPick uninstall
+```
+
+### Shell-script installers (no Node required)
 
 **macOS / Linux:**
 
@@ -486,19 +504,25 @@ KeyPick needs **Git** for vault syncing and **Bun** as its runtime. The first-ru
 
 ### Uninstalling
 
-**macOS / Linux / WSL:**
+Cross-platform `npx` uninstaller:
 
 ```bash
+npx github:seanrobertwright/KeyPick uninstall
+```
+
+Shell-script alternatives:
+
+```bash
+# macOS / Linux / WSL
 curl -fsSL https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/uninstall.sh | sh
 ```
 
-**Windows (PowerShell):**
-
 ```powershell
+# Windows (PowerShell)
 irm https://raw.githubusercontent.com/seanrobertwright/KeyPick/master/uninstall.ps1 | iex
 ```
 
-Removes the KeyPick bundle, shim, any legacy installs (Bun global or cargo-era Rust), and — after confirmation — your config dir (`~/.keypick/`, including cloned vault repos). Prompts separately before deleting your age private key; if you have no recovery key or other machines, deleting it makes your vault contents permanently inaccessible.
+All of them remove the KeyPick bundle, shim, any legacy installs (Bun global or cargo-era Rust), and — after confirmation — your config dir (`~/.keypick/`, including cloned vault repos). Each prompts separately before deleting your age private key; if you have no recovery key or other machines, deleting it makes your vault contents permanently inaccessible.
 
 ---
 
@@ -825,7 +849,7 @@ rm temp_key.txt
 
 ```
 KeyPick/
-├── .sops.yaml                          # Template for secrets repos
+├── .sops.yaml.example                  # Template for secrets repos
 ├── .github/
 │   └── workflows/
 │       └── vault-sync.yml              # Template: auto re-encryption CI
@@ -981,17 +1005,25 @@ Contributions are welcome! Here's how to get started:
 
 ```
 KeyPick/
-├── ts/                # TypeScript implementation (Bun project)
+├── bin/                    # Cross-platform installer wizard (Node, zero deps)
+│   ├── keypick.mjs         #   dispatcher — bin entry for `npx github:…`
+│   ├── installer.mjs       #   install wizard
+│   ├── uninstaller.mjs     #   uninstall wizard
+│   └── ui.mjs              #   colors, boxes, prompts, OSC-52 clipboard
+├── package.json            # Root package.json — makes `npx github:…` work
+├── ts/                     # TypeScript keypick CLI (Bun project)
 │   ├── src/
-│   │   ├── lib/       # vault, auth, terminal, wsl
+│   │   ├── lib/            #   vault, auth, terminal, wsl
 │   │   ├── commands/
 │   │   └── main.ts
 │   └── package.json
-├── install.sh         # Unix one-line installer
-├── install.ps1        # Windows one-line installer
+├── install.sh              # Unix shell-script fallback installer
+├── install.ps1             # Windows PowerShell fallback installer
+├── uninstall.sh
+├── uninstall.ps1
 └── .github/workflows/
-    ├── release.yml    # Tag-triggered npm publish
-    └── vault-sync.yml # Auto re-encryption for vault repos
+    ├── release.yml         # Tag-triggered release build
+    └── vault-sync.yml      # Auto re-encryption for vault repos
 ```
 
 ### Development Setup

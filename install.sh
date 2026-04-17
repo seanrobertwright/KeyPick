@@ -18,6 +18,51 @@ info() { printf "\033[36m==>\033[0m %s\n" "$*"; }
 warn() { printf "\033[33m!\033[0m  %s\n" "$*"; }
 die()  { printf "\033[31mx\033[0m  %s\n" "$*" >&2; exit 1; }
 
+install_skill() {
+  printf "\n"
+  printf "Install the KeyPick Claude Code skill?\n"
+  printf "  G) Global  - available in every project (~/.claude/skills/keypick)\n"
+  printf "  P) Project - current directory only (./.claude/skills/keypick)\n"
+  printf "  S) Skip\n\n"
+
+  local scope=""
+  if [ ! -t 0 ] && [ -r /dev/tty ]; then
+    printf "Enter G, P, or S: " >&2
+    read -r scope </dev/tty || scope=""
+  else
+    printf "Enter G, P, or S: "
+    read -r scope || scope=""
+  fi
+
+  local skill_dest
+  case "$scope" in
+    [Gg]) skill_dest="$HOME/.claude/skills/keypick" ;;
+    [Pp]) skill_dest="$(pwd)/.claude/skills/keypick" ;;
+    [Ss]|'') info "Skipping skill installation."; return ;;
+    *) warn "Unrecognised choice '$scope' - skipping skill installation."; return ;;
+  esac
+
+  local script_dir=""
+  if [ -n "${0:-}" ] && [ -f "$0" ]; then
+    script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || script_dir=""
+  fi
+  local local_skill="$script_dir/skills/keypick/SKILL.md"
+
+  mkdir -p "$skill_dest"
+  if [ -n "$script_dir" ] && [ -f "$local_skill" ]; then
+    install -m 0644 "$local_skill" "$skill_dest/SKILL.md"
+  else
+    info "Fetching skill from GitHub..."
+    if ! curl -fsSL "https://raw.githubusercontent.com/${REPO}/master/skills/keypick/SKILL.md" \
+         -o "$skill_dest/SKILL.md"; then
+      warn "Failed to fetch skill from GitHub - skipping."
+      return
+    fi
+  fi
+
+  info "Skill installed to $skill_dest"
+}
+
 if ! command -v bun >/dev/null 2>&1; then
   die "Bun is not installed. Install it first: https://bun.sh"
 fi
@@ -57,5 +102,7 @@ case ":$PATH:" in
   *) warn "$BIN_DIR is not on PATH. Add it to your shell profile:";
      warn "  export PATH=\"$BIN_DIR:\$PATH\"" ;;
 esac
+
+install_skill
 
 info "Done. Run 'keypick setup' to get started."

@@ -399,7 +399,10 @@ export function defaultVaultDir(name: string): string {
 /** Decrypt vault.yaml via SOPS and parse into a Vault struct. */
 export async function load(): Promise<VaultData> {
   const vaultFile = await vaultFilePath();
-  const result = spawnSync("sops", ["-d", vaultFile], { encoding: "buffer" });
+  const result = spawnSync("sops", ["-d", vaultFile], {
+    cwd: path.dirname(vaultFile),
+    encoding: "buffer",
+  });
 
   if (result.error) {
     console.error(
@@ -447,7 +450,7 @@ export async function save(vault: VaultData): Promise<void> {
       "--output", vaultFile,
       tmpPath,
     ],
-    { encoding: "buffer" },
+    { cwd: dir, encoding: "buffer" },
   );
 
   try {

@@ -1,0 +1,22 @@
+{
+  "name": "keypick",
+  "version": "0.2.0",
+  "description": "KeyPick installer — run via `npx github:seanrobertwright/KeyPick install`",
+  "type": "module",
+  "bin": {
+    "keypick": "./bin/keypick.mjs"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seanrobertwright/KeyPick.git"
+  },
+  "license": "MIT"
+}

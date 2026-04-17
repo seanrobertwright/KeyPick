@@ -105,6 +105,7 @@ if [ -d "$SKILL_DIR" ]; then
     skip "Kept skill: $SKILL_DIR"
   fi
 fi
+warn "Project-scope skills (./.claude/skills/keypick in individual projects) are not removed automatically."
 
 # 6. Age private key (irreversible)
 if [ -f "$AGE_KEYS" ]; then

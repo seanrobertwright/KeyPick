@@ -114,6 +114,7 @@ if (Test-Path -LiteralPath $SkillDir) {
         Skip "Kept skill: $SkillDir"
     }
 }
+Warn 'Project-scope skills (.\.claude\skills\keypick in individual projects) are not removed automatically.'
 
 # 6. Age private key (irreversible)
 if (Test-Path -LiteralPath $AgeKeys) {
