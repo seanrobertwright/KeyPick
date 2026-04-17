@@ -36,125 +36,83 @@ export async function verify(): Promise<void> {
 
 /** PowerShell script that awaits WinRT's UserConsentVerifier. Runs on the host.
  *
- * Also starts a background STA thread that pulls the Hello/CredentialUI dialog
- * onto the current virtual desktop if CredentialUIBroker places it elsewhere
- * (common when the terminal and the broker's last session differ).
+ * Parents the Hello dialog to the user's terminal window via
+ * IUserConsentVerifierInterop::RequestVerificationForWindowAsync. Without a
+ * parent HWND, CredentialUIBroker may place the dialog on whichever virtual
+ * desktop it last used — stranding the user's terminal on a different desktop
+ * while the prompt waits invisibly elsewhere.
+ *
+ * We previously tried to chase the dialog after the fact with
+ * IVirtualDesktopManager::MoveWindowToDesktop, but that API only moves
+ * windows owned by the calling process — the Hello dialog belongs to
+ * CredentialUIBroker.exe, so the call always failed silently with
+ * E_ACCESSDENIED. Parenting at creation is the correct fix.
  */
 function windowsHelloScript(): string {
   const reason = REASON.replace(/'/g, "''");
   return `
 $ErrorActionPreference = 'Stop'
+function Step($m) { [Console]::Error.WriteLine("[keypick-auth] $m") }
 
+try {
+
+Step 'add-type:interop'
 Add-Type -Language CSharp @"
 using System;
 using System.Runtime.InteropServices;
-using System.Text;
 
 public static class W {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int maxCount);
-    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int maxCount);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("ole32.dll")] public static extern int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
-    [DllImport("ole32.dll")] public static extern void CoUninitialize();
+    [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    public const uint GA_ROOTOWNER = 3;
 }
 
-[ComImport]
-[Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IVirtualDesktopManager {
-    [PreserveSig] int IsWindowOnCurrentVirtualDesktop(IntPtr h, out int onCurrent);
-    [PreserveSig] int GetWindowDesktopId(IntPtr h, out Guid desktopId);
-    [PreserveSig] int MoveWindowToDesktop(IntPtr h, [MarshalAs(UnmanagedType.LPStruct)] Guid desktopId);
-}
+// Direct vtable invocation for IUserConsentVerifierInterop. We can't cast the
+// activation factory to a [ComImport] interop interface via -as in PowerShell:
+// .NET Framework's WinRT projection layer wraps the factory and hides its
+// non-projected interfaces from managed casts, even though QueryInterface at
+// the raw-IUnknown level succeeds. So we reach past the projection by reading
+// the vtable slot and calling the function pointer directly.
+public static class Direct {
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    public delegate int RequestDelegate(
+        IntPtr thisPtr,
+        IntPtr appWindow,
+        IntPtr messageHString,
+        ref Guid riid,
+        out IntPtr asyncOperation);
 
-// Concrete wrapper so PowerShell can invoke instance methods directly;
-// PS cannot dispatch against an IUnknown-only COM interface without this.
-public class VDM {
-    private IVirtualDesktopManager mgr;
-    public VDM() {
-        mgr = (IVirtualDesktopManager)Activator.CreateInstance(
-            Type.GetTypeFromCLSID(new Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a"))
-        );
-    }
-    public Guid GetWindowDesktopId(IntPtr h) {
-        Guid g; int hr = mgr.GetWindowDesktopId(h, out g);
-        if (hr != 0) throw new System.ComponentModel.Win32Exception(hr);
-        return g;
-    }
-    public bool IsOnCurrent(IntPtr h) {
-        int r; int hr = mgr.IsWindowOnCurrentVirtualDesktop(h, out r);
-        if (hr != 0) throw new System.ComponentModel.Win32Exception(hr);
-        return r != 0;
-    }
-    public void MoveTo(IntPtr h, Guid id) {
-        int hr = mgr.MoveWindowToDesktop(h, id);
-        if (hr != 0) throw new System.ComponentModel.Win32Exception(hr);
+    [DllImport("combase.dll", PreserveSig = true)]
+    static extern int WindowsCreateString(
+        [MarshalAs(UnmanagedType.LPWStr)] string src, uint length, out IntPtr hstring);
+
+    [DllImport("combase.dll", PreserveSig = true)]
+    static extern int WindowsDeleteString(IntPtr hstring);
+
+    // Invokes IUserConsentVerifierInterop::RequestVerificationForWindowAsync.
+    // interopPtr: a raw IUnknown* already QI'd to IUserConsentVerifierInterop.
+    // Returns a raw pointer to the returned IAsyncOperation (caller releases).
+    // Slot 6 = IUnknown(0-2) + IInspectable(3-5) + our method at 6.
+    public static IntPtr Call(IntPtr interopPtr, IntPtr hwnd, string message, Guid asyncOpIid) {
+        IntPtr hstring;
+        int hrCreate = WindowsCreateString(message, (uint)message.Length, out hstring);
+        if (hrCreate != 0) throw new System.ComponentModel.Win32Exception(hrCreate, "WindowsCreateString");
+        try {
+            IntPtr vtbl = Marshal.ReadIntPtr(interopPtr);
+            IntPtr method = Marshal.ReadIntPtr(vtbl, 6 * IntPtr.Size);
+            RequestDelegate del = (RequestDelegate)Marshal.GetDelegateForFunctionPointer(method, typeof(RequestDelegate));
+            IntPtr asyncOp;
+            int hr = del(interopPtr, hwnd, hstring, ref asyncOpIid, out asyncOp);
+            if (hr != 0) throw new System.ComponentModel.Win32Exception(hr, "RequestVerificationForWindowAsync");
+            return asyncOp;
+        } finally {
+            WindowsDeleteString(hstring);
+        }
     }
 }
 "@ | Out-Null
 
-# Capture the virtual desktop id of the user's terminal (current foreground).
-$termHwnd = [W]::GetForegroundWindow()
-$myDesktop = [Guid]::Empty
-$canMove = $false
-try {
-    $vdm = [VDM]::new()
-    $myDesktop = $vdm.GetWindowDesktopId($termHwnd)
-    if ($myDesktop -ne [Guid]::Empty) { $canMove = $true }
-} catch {}
-
-# Background poller: for up to 10s, find the Hello dialog and move it to our
-# desktop if CredentialUIBroker placed it elsewhere.
-if ($canMove) {
-    $poller = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
-        param($target)
-        [W]::CoInitializeEx([IntPtr]::Zero, 2) | Out-Null  # COINIT_APARTMENTTHREADED
-        try {
-            $vdm2 = [VDM]::new()
-            $deadline = (Get-Date).AddSeconds(10)
-            $seen = @{}
-            while ((Get-Date) -lt $deadline) {
-                $cb = [W+EnumWindowsProc]{
-                    param($h, $l)
-                    if (-not [W]::IsWindowVisible($h)) { return $true }
-                    if ($seen.ContainsKey($h)) { return $true }
-                    $cls = New-Object System.Text.StringBuilder 256
-                    [W]::GetClassName($h, $cls, 256) | Out-Null
-                    $c = $cls.ToString()
-                    $ttl = New-Object System.Text.StringBuilder 256
-                    [W]::GetWindowText($h, $ttl, 256) | Out-Null
-                    $t = $ttl.ToString()
-                    $isCandidate = ($c -eq 'Credential Dialog Xaml Host') -or
-                                   (($c -eq 'ApplicationFrameWindow' -or $c -eq 'Windows.UI.Core.CoreWindow') -and
-                                    ($t -match 'Windows Security|Windows Hello'))
-                    if ($isCandidate) {
-                        try {
-                            if (-not $vdm2.IsOnCurrent($h)) {
-                                $vdm2.MoveTo($h, $target)
-                            }
-                            [W]::SetForegroundWindow($h) | Out-Null
-                        } catch {}
-                        $seen[$h] = $true
-                    }
-                    return $true
-                }
-                [W]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
-                Start-Sleep -Milliseconds 150
-            }
-        } finally {
-            [W]::CoUninitialize()
-        }
-    })
-    $poller.SetApartmentState([System.Threading.ApartmentState]::STA)
-    $poller.IsBackground = $true
-    $poller.Start($myDesktop)
-}
-
-# WinRT bootstrap
+Step 'winrt:load-types'
 [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime] | Out-Null
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 
@@ -168,20 +126,79 @@ function AwaitOp($op, $resultType) {
     $task.Result
 }
 
+Step 'availability:check'
 $availType = [Windows.Security.Credentials.UI.UserConsentVerifierAvailability]
 $availability = AwaitOp ([Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()) $availType
+Step "availability:$availability"
 
 if ($availability -ne $availType::Available) {
     [Console]::Error.WriteLine("Biometric/PIN not available: $availability")
     exit 2
 }
 
+# Find the terminal's root-owner HWND. For Windows Terminal (and other
+# tabbed hosts), the foreground HWND may be a child; GA_ROOTOWNER walks up
+# to the window that can legitimately parent a modal.
+$fg = [W]::GetForegroundWindow()
+$parent = [W]::GetAncestor($fg, [W]::GA_ROOTOWNER)
+if ($parent -eq [IntPtr]::Zero) { $parent = $fg }
+Step "hwnd:fg=$fg parent=$parent"
+
+# Get the activation factory, QI for the interop interface, and invoke the
+# window-scoped request via direct vtable call (see Direct class above for
+# why a managed cast won't work). The async-op IID is derived at runtime
+# via WinRT's parameterized-generic projection.
+Step 'interop:get-factory'
 $resultType = [Windows.Security.Credentials.UI.UserConsentVerificationResult]
-$result = AwaitOp ([Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('${reason}')) $resultType
+$asyncOpType = [Windows.Foundation.IAsyncOperation\`1].MakeGenericType($resultType)
+$iid = $asyncOpType.GUID
+Step "interop:iid=$iid"
+
+$factory = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeMarshal]::GetActivationFactory(
+    [Windows.Security.Credentials.UI.UserConsentVerifier]
+)
+Step "interop:factory=$($factory.GetType().FullName)"
+
+# QI the factory for IUserConsentVerifierInterop at the raw-IUnknown level.
+# The CLR projection wrapper won't let us cast to it directly, so we work
+# with the raw pointer returned by QueryInterface.
+$factoryUnk = [System.Runtime.InteropServices.Marshal]::GetIUnknownForObject($factory)
+try {
+    $iidInterop = [Guid]'39E050C3-4E74-441A-8DC0-B81104DF949C'
+    $ppv = [IntPtr]::Zero
+    $hr = [System.Runtime.InteropServices.Marshal]::QueryInterface($factoryUnk, [ref]$iidInterop, [ref]$ppv)
+    Step ("interop:QI hr=0x{0:X8} ppv={1}" -f $hr, $ppv)
+    if ($hr -ne 0 -or $ppv -eq [IntPtr]::Zero) {
+        [Console]::Error.WriteLine("QueryInterface for IUserConsentVerifierInterop failed: HRESULT 0x$('{0:X8}' -f $hr)")
+        exit 3
+    }
+
+    try {
+        Step 'interop:call'
+        $opPtr = [Direct]::Call($ppv, $parent, '${reason}', $iid)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::Release($ppv) | Out-Null
+    }
+} finally {
+    [System.Runtime.InteropServices.Marshal]::Release($factoryUnk) | Out-Null
+}
+
+Step "interop:async-op-ptr=$opPtr"
+$op = [System.Runtime.InteropServices.Marshal]::GetObjectForIUnknown($opPtr)
+[System.Runtime.InteropServices.Marshal]::Release($opPtr) | Out-Null
+Step 'interop:await'
+$result = AwaitOp $op $resultType
+Step "result:$result"
 
 if ($result -eq $resultType::Verified) { exit 0 }
 [Console]::Error.WriteLine("Verification failed: $result")
 exit 1
+
+} catch {
+    [Console]::Error.WriteLine("[keypick-auth][fatal] $($_.Exception.GetType().FullName): $($_.Exception.Message)")
+    [Console]::Error.WriteLine($_.ScriptStackTrace)
+    exit 9
+}
 `;
 }
 
