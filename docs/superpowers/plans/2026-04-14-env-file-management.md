@@ -1,12 +1,16 @@
 # .env File Management Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use lril-superpowers:subagent-driven-development (if subagents available) or lril-superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **STATUS — SHIPPED:** This plan was implemented and merged to master in the v0.2.0 release cycle. The implementation lives in `ts/src/commands/env/{index,pull,push,status,utils}.ts`. The plan below is preserved as the historical design record.
+>
+> **Ported to TypeScript.** When this plan was written the project was Rust; it was later migrated TypeScript-only (see commit `36b2c60 feat: remove Rust implementation, go TypeScript-only`). File names, crate references, and tooling mentions below describe the original Rust design — the shipped TypeScript port is the authoritative artifact.
+
+---
 
 **Goal:** Add `keypick env push/pull/status` commands that encrypt, store, and sync per-project `.env` files through the existing vault infrastructure.
 
 **Architecture:** New `src/commands/env/` module with four files (mod.rs, push.rs, pull.rs, status.rs, utils.rs). Project identification derived from git remote URL. `.env*` files stored as individually SOPS-encrypted dotenv files under `envs/<project-id>/` in the vault repo. Same `.sops.yaml` recipient management as vault.yaml.
 
-**Tech Stack:** Rust, clap (CLI), SOPS (dotenv encryption), age (keys), inquire (prompts), colored (output), indicatif (spinners), glob (file discovery)
+**Tech Stack (as designed):** Rust, clap (CLI), SOPS (dotenv encryption), age (keys), inquire (prompts), colored (output), indicatif (spinners), glob (file discovery). *Shipped on:* TypeScript + Bun, inquirer/prompts, chalk, ora, sops, age.
 
 ---
 

@@ -64,6 +64,7 @@ using System.Runtime.InteropServices;
 public static class W {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
     public const uint GA_ROOTOWNER = 3;
 }
 
@@ -186,9 +187,20 @@ try {
 Step "interop:async-op-ptr=$opPtr"
 $op = [System.Runtime.InteropServices.Marshal]::GetObjectForIUnknown($opPtr)
 [System.Runtime.InteropServices.Marshal]::Release($opPtr) | Out-Null
-Step 'interop:await'
-$result = AwaitOp $op $resultType
-Step "result:$result"
+
+try {
+    Step 'interop:await'
+    $result = AwaitOp $op $resultType
+    Step "result:$result"
+} finally {
+    # Restore focus to the terminal. After CredentialUIBroker's dialog closes,
+    # Windows picks whichever window it wants as the new foreground — often not
+    # our terminal. SetForegroundWindow is blocked for background processes by
+    # the foreground lock; SwitchToThisWindow bypasses that.
+    if ($parent -ne [IntPtr]::Zero) {
+        try { [W]::SwitchToThisWindow($parent, $true) } catch {}
+    }
+}
 
 if ($result -eq $resultType::Verified) { exit 0 }
 [Console]::Error.WriteLine("Verification failed: $result")
