@@ -1,6 +1,6 @@
 {
   "name": "keypick",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cross-platform, biometric-secured API key vault manager powered by SOPS + age",
   "type": "module",
   "bin": {
