@@ -15,7 +15,7 @@ import * as env from "./commands/env/index.ts";
 import * as setup from "./commands/setup/index.ts";
 import * as interactive from "./commands/interactive.ts";
 
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 function printBanner(): void {
   const banner = `
