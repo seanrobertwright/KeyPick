@@ -65,6 +65,10 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "ci: auto-sync vault recipients from .sops.yaml [skip ci]"
-          file_pattern: "vault.yaml envs/"
+          # Only include envs/ if it actually exists. git-auto-commit-action's
+          # file_pattern is passed straight to `git add`, which errors with
+          # exit 128 when given a non-existent path — even if other paths in
+          # the pattern are valid. So we conditionally append it.
+          file_pattern: ${{ hashFiles('envs/**') != '' && 'vault.yaml envs/' || 'vault.yaml' }}
           commit_user_name: "KeyPick Bot"
           commit_user_email: "actions@github.com"

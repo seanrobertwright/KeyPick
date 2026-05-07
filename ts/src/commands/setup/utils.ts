@@ -181,31 +181,86 @@ export function gitCommitAndPush(dir: string, files: string[], message: string):
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Vault capability probes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// True iff this machine's age key matches a current recipient and can decrypt
+// vault.yaml. Used to decide whether `sops updatekeys` can run locally or
+// whether re-encryption must be deferred to GH Actions / another machine.
+export function canDecryptVault(vaultDir: string): boolean {
+  const vaultYaml = path.join(vaultDir, "vault.yaml");
+  if (!existsSync(vaultYaml)) return true;
+  const res = spawnSync("sops", ["-d", "vault.yaml"], {
+    cwd: vaultDir,
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+  return res.status === 0;
+}
+
+export function hasAutoSyncWorkflow(vaultDir: string): boolean {
+  return existsSync(
+    path.join(vaultDir, ".github", "workflows", "vault-sync.yml"),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // .sops.yaml recipient editing
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Adds `newKey` to EVERY `age:` block in .sops.yaml where it's not already
+// present. .sops.yaml may have multiple creation_rules (e.g. `vault.yaml$`
+// and `envs/.*`), each with its own age recipient list. The previous
+// implementation only appended to the last block, leaving env files
+// undecryptable on machines registered via the vault-only path.
+//
+// Returns the (possibly unchanged) content. If `content === addRecipient(...)`,
+// the key was already present in every block — caller can use that
+// equality to detect "no-op" and skip commits.
 export function addRecipient(content: string, newKey: string): string {
   if (!newKey.startsWith("age1")) {
     throw new Error(`Invalid age public key: ${newKey}`);
   }
-  if (content.includes(newKey)) return content;
 
   const lines = content.split("\n");
-  let lastKeyIdx: number | null = null;
+
+  // Find each contiguous run of age1 lines. Each run is one `age:` block.
+  const groups: Array<[number, number]> = [];
+  let groupStart: number | null = null;
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i]!.trim().replace(/,+$/, "");
-    if (trimmed.startsWith("age1")) lastKeyIdx = i;
+    const isKey = trimmed.startsWith("age1");
+    if (isKey && groupStart === null) groupStart = i;
+    if (!isKey && groupStart !== null) {
+      groups.push([groupStart, i - 1]);
+      groupStart = null;
+    }
   }
+  if (groupStart !== null) groups.push([groupStart, lines.length - 1]);
 
-  if (lastKeyIdx === null) {
+  if (groups.length === 0) {
     throw new Error("Could not find age key entries in .sops.yaml");
   }
 
-  if (!lines[lastKeyIdx]!.trimEnd().endsWith(",")) {
-    lines[lastKeyIdx] = `${lines[lastKeyIdx]!.trimEnd()},`;
+  // Insert in reverse order so earlier group indices don't shift.
+  for (let g = groups.length - 1; g >= 0; g--) {
+    const [start, end] = groups[g]!;
+
+    let alreadyInGroup = false;
+    for (let i = start; i <= end; i++) {
+      if (lines[i]!.includes(newKey)) {
+        alreadyInGroup = true;
+        break;
+      }
+    }
+    if (alreadyInGroup) continue;
+
+    if (!lines[end]!.trimEnd().endsWith(",")) {
+      lines[end] = `${lines[end]!.trimEnd()},`;
+    }
+    const indentMatch = lines[end]!.match(/^\s*/);
+    const indent = indentMatch ? indentMatch[0] : "";
+    lines.splice(end + 1, 0, `${indent}${newKey}`);
   }
-  const indentMatch = lines[lastKeyIdx]!.match(/^\s*/);
-  const indent = indentMatch ? indentMatch[0] : "";
-  lines.splice(lastKeyIdx + 1, 0, `${indent}${newKey}`);
+
   return `${lines.join("\n")}\n`;
 }
