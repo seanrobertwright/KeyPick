@@ -4,6 +4,10 @@
 /ts/dist-pkg/
 /ts/.bun/
 
+# Rust build artifacts
+target/
+/rust/target/
+
 # Generated .env files (NEVER commit these)
 .env
 .env.local
