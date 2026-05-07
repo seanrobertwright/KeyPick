@@ -1,6 +1,6 @@
 {
   "name": "keypick",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "KeyPick installer — run via `npx github:seanrobertwright/KeyPick install`",
   "type": "module",
   "bin": {
