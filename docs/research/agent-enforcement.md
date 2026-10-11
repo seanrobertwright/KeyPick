@@ -36,15 +36,16 @@ secret values without the user's biometric approval.
 - **Output redaction is uneven.** Claude Code (`updatedToolOutput`) and the Copilot CLI
   (`modifiedResult`) can replace a tool's output, shell included, before the model sees it. Codex
   can only block a result and substitute the hook's feedback text. Cursor can replace MCP output
-  only, and Copilot in VS Code documents no way to do it.
+  only. Copilot in VS Code cannot: a blocking `PostToolUse` appends a note, and the original output
+  still reaches the model.
 - **No agent has a built-in "run with secrets, return only exit code and scrubbed output" tool.**
   The only portable way to get that is a KeyPick-owned wrapper (a CLI subcommand or an MCP server)
   that holds the values, runs the child, and scrubs its own output.
-- **Claude Code's sandbox can mask credentials**: sandboxed commands see a placeholder, and the
-  sandbox proxy substitutes the real value on outbound requests to allowed hosts. It is the
-  closest any agent comes to "use a secret without seeing it", but it needs TLS termination, works
-  only for HTTP-borne credentials, and does not run on native Windows. Codex's source has a similar
-  credential broker that is not yet documented.
+- **Claude Code's and the Copilot CLI's sandboxes can mask credentials**: sandboxed commands see a
+  placeholder, and a local proxy substitutes the real value on outbound requests to allowed hosts.
+  This is the closest any agent comes to "use a secret without seeing it", but it works only for
+  credentials sent over HTTPS, needs the sandbox on, and Claude Code's sandbox does not run on
+  native Windows. Codex's source has a similar credential broker that is not yet documented.
 - **Hooks mostly fail open.** In Claude Code, Codex, Cursor, and Copilot in VS Code a hook that
   crashes or exits with an unexpected code lets the call through. Claude Code
   (`onFailure: "block"`) and Cursor (`failClosed: true`) let a hook opt into failing closed. The
@@ -69,8 +70,8 @@ The per-agent notes give the caveats.
 | Claude Code | Yes: `PreToolUse` hooks, deny rules; OS sandbox with per-path read deny (not native Windows) | Yes: `updatedInput` | Yes, every tool: `updatedToolOutput` | No built-in. Closest: sandbox credential `mask` (HTTP only) | Yes. `requiresUserInteraction` forces a prompt per call; servers run outside the sandbox |
 | Codex CLI | Yes: `PreToolUse` hooks, `forbidden` rules (experimental), permission profiles with per-path read deny (beta, includes native Windows) | Yes: `updatedInput` | Partly: a blocking `PostToolUse` replaces the result with the hook's feedback text | No built-in. A proxy credential broker exists in source but is undocumented | Yes, per-tool `approval_mode` |
 | Cursor (IDE and CLI) | Yes: `beforeShellExecution`, `beforeReadFile`, `preToolUse` hooks; CLI deny rules; sandbox without per-file read deny | Partly: `updated_input`, documented in one line | MCP only: `updated_mcp_tool_output`; shell output is observe-only | No built-in locally. Cloud "Runtime Secrets" are redacted | Yes, approval by default |
-| Copilot in VS Code | Yes: `PreToolUse` hooks (Preview); terminal sandbox `deniedPaths` (Preview; Experimental on Windows). Auto-approve rules only prompt | Yes: `updatedInput` | Not documented | No built-in | Yes; optional per-server sandbox with `denyRead` (macOS and Linux) |
-| Copilot CLI | Yes: `preToolUse` hooks (fail closed on errors), `--deny-tool`, local sandbox with deny rules | Yes: `modifiedArgs` | Yes: `modifiedResult` | No built-in | Yes; local servers run inside the sandbox by default |
+| Copilot in VS Code | Yes: `PreToolUse` hooks (Preview). Sandbox `deniedPaths` only in the Agent Host harness, off by default. Auto-approve rules only prompt | Yes: `updatedInput` | No: a blocking `PostToolUse` appends a note; the original output is still sent | No built-in | Yes; optional per-server sandbox with `denyRead` (macOS and Linux) |
+| Copilot CLI | Yes: `preToolUse` hooks (fail closed on errors), `--deny-tool`, local sandbox with deny rules | Yes: `modifiedArgs` | Yes: `modifiedResult` | No built-in. Closest: sandbox masked env vars (HTTPS headers only) | Yes; local servers run inside the sandbox by default |
 
 Environment the agent's shell starts with:
 
@@ -80,7 +81,7 @@ Environment the agent's shell starts with:
 | Codex CLI | Yes, `inherit: All` by default, secret-named variables kept | Login shell by default; no direnv | Opt-in through `shell_environment_policy` |
 | Cursor CLI | Yes (forum evidence before 2026-06) | Loads `.envrc` automatically since v2026.06.09 | None documented |
 | Copilot in VS Code | Yes, unless `terminal.integrated.inheritEnv` is `false` | Uses the user's terminal profile | None documented |
-| Copilot CLI | **Unverified** | **Unverified** | None documented |
+| Copilot CLI | Yes (inferred: `--secret-env-vars` exists to remove inherited variables) | **Unverified** | Opt-in `--secret-env-vars`; sandbox masking |
 
 ## Per-agent notes
 
@@ -228,10 +229,13 @@ Whether the original output is kept anywhere the model can later reach is **unve
 **Env injection.** No built-in "run with secrets" tool. `shell_environment_policy.set` injects
 fixed values into every command, which puts them in plain config and in every command's
 environment ([config reference](https://learn.chatgpt.com/docs/config-file/config-reference)). The
-config schema in the source also has a network-proxy `credential_broker`, per-provider
-`credentials`, and a `credential_masking` feature flag (`codex-rs/core/config.schema.json`), which
-look like Claude Code's masking, but no user-facing doc for them was found; their behaviour is
-**unverified**.
+source also has a network-proxy credential broker, added as
+`features.network_proxy.credential_broker` in
+[PR #40466](https://github.com/openai/codex/pull/40466) (merged 2026-08-24), with per-provider
+`credentials` and a `credential_masking` flag in `codex-rs/core/config.schema.json`. It resembles
+Claude Code's masking, but the same PR says it will "restore real credentials for unsandboxed
+escalated commands", so one approved escalation hands the real values over. No user-facing doc
+for it was found; treat it as experimental and its behaviour as **unverified**.
 
 **Env inheritance.** By default Codex passes its whole environment to commands, including
 variables whose names contain `KEY`, `SECRET`, or `TOKEN`: the `ShellEnvironmentPolicy` default in
@@ -239,13 +243,19 @@ variables whose names contain `KEY`, `SECRET`, or `TOKEN`: the `ShellEnvironment
 the config reference describes that flag as "Keep variables containing KEY, SECRET, or TOKEN …
 (default: true)". Setting it to `false`, or using `inherit = "core"` or `"none"` with filters,
 strips them. The shell tool uses a login shell unless configured otherwise ("omitting `login`
-defaults to using a login shell", `allow_login_shell` in the schema), so login profile files run.
+defaults to using a login shell", `allow_login_shell` in the schema), so login profile files run,
+and the `shell_snapshot` feature is stable and on by default (`codex-rs/features/src/lib.rs`).
 Codex does not run direnv; variables direnv loaded into the launching terminal are inherited (an
-inference from `inherit: All`).
+inference from `inherit: All`). The filters are not watertight: open issue
+[#48096](https://github.com/openai/codex/issues/48096) (2026-09-25) reports app-server
+environment reaching `exec_command` "despite `include_only`".
 
 **MCP.** Servers are configured under `mcp_servers` with `env` ("forwarded to the MCP stdio
 server") and `env_vars` (variables to whitelist) ([config reference](https://learn.chatgpt.com/docs/config-file/config-reference)).
-The schema exposes a per-tool `approval_mode` (`auto`, `prompt`, `writes`, `approve`); the exact
+Unlike shell commands, a stdio server does not inherit Codex's environment: `create_env_for_mcp_server`
+in `codex-rs/rmcp-client/src/utils.rs` starts from a short `DEFAULT_ENV_VARS` list (`HOME`,
+`PATH`, `SHELL`, `USER`, locale and terminal variables) and adds only `env_vars` and `env`. The
+schema exposes a per-tool `approval_mode` (`auto`, `prompt`, `writes`, `approve`); the exact
 semantics of each value are **unverified**.
 
 ### Cursor
@@ -317,8 +327,10 @@ timeout is 30 seconds ([hooks reference](https://code.visualstudio.com/docs/agen
 Terminal auto-approve rules do not block: "A false rule requires approval. It does not block the
 command", and "Terminal auto-approval is a best-effort convenience, not a security boundary"
 ([approvals](https://code.visualstudio.com/docs/agents/run/approvals)). The terminal sandbox
-(Preview on macOS, Linux, and WSL2; Experimental on Windows) supports `deniedPaths` ("No access")
-in `chat.agent.sandbox.fileSystem.userConfiguredPaths`; outbound network is not blocked by default,
+applies to "the Agent Host's default Copilot SDK tool implementation", "not the Local chat
+harness", and `chat.agent.sandbox.enabled` "defaults to `off`". Where it applies (Preview on
+macOS, Linux, and WSL2; Experimental on Windows) it supports `deniedPaths` ("No access") in
+`chat.agent.sandbox.fileSystem.userConfiguredPaths`; outbound network is not blocked by default,
 and `chat.agent.sandbox.allowUnsandboxedCommands` defaults to `true`, letting the agent ask to run
 a command unsandboxed ([sandboxing](https://code.visualstudio.com/docs/agents/run/agent-sandboxing)).
 Repository content exclusion is marked not supported in VS Code agent mode
@@ -327,10 +339,12 @@ Repository content exclusion is marked not supported in VS Code agent mode
 **VS Code, rewrite.** `updatedInput` is an "Optional replacement tool input" that must match the
 tool schema or is ignored ([hooks reference](https://code.visualstudio.com/docs/agents/reference/hooks-reference)).
 
-**VS Code, redact output.** Not documented. `PostToolUse` can set `decision: "block"`, described as
-"blocks further processing", and add `additionalContext`; no field replaces the tool response, and
-whether the model still sees the original after a block is **unverified**
-([hooks reference](https://code.visualstudio.com/docs/agents/reference/hooks-reference)).
+**VS Code, redact output.** No. `PostToolUse` can set `decision: "block"`, described as "blocks
+further processing", and add `additionalContext`; no field replaces the tool response
+([hooks reference](https://code.visualstudio.com/docs/agents/reference/hooks-reference)). In the
+source (`extensions/copilot/src/extension/prompts/node/panel/toolCalling.tsx` in
+`microsoft/vscode`), a block pushes "The PostToolUse hook blocked this tool result" onto the
+existing `toolResult.content`, so the original output still reaches the model.
 
 **Copilot CLI, block and rewrite.** `preToolUse` hooks return `permissionDecision` (`allow`,
 `deny`, `ask`) and can substitute arguments with `modifiedArgs`. Unlike the other agents,
@@ -352,6 +366,13 @@ all tools", and the docs' matcher example targets `bash`
 ([hooks reference](https://docs.github.com/en/copilot/reference/hooks-configuration)). Whether the
 original is kept in session logs is **unverified**.
 
+**Copilot CLI, env injection.** With local sandboxing on, `sandbox.credentials.envVars` entries
+are masked: "Sandboxed processes receive placeholder values. A local proxy supplies the real
+credentials only in HTTPS request headers sent to approved destinations", and "Masking is active
+only while local sandboxing is enabled". Separately, `--secret-env-vars` "removes named variables
+from command and MCP server environments"
+([local sandbox settings](https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/configuring-local-sandbox-settings)).
+
 **Env inheritance.** "The agent uses the shell you have configured as the default for the
 terminal", except `cmd` and `sh` ([tools](https://code.visualstudio.com/docs/agents/run/tools)). On
 macOS VS Code starts that shell as a login shell, and setting `terminal.integrated.inheritEnv` to
@@ -359,7 +380,9 @@ macOS VS Code starts that shell as a login shell, and setting `terminal.integrat
 ([terminal profiles](https://code.visualstudio.com/docs/terminal/profiles)). Since 1.121
 (2026-05-20) "VS Code now sets a `VSCODE_AGENT` environment variable for agent-initiated terminal
 commands" ([release notes 1.121](https://code.visualstudio.com/updates/v1_121)). Whether a direnv shell hook
-fires in agent terminals, and how the Copilot CLI shell builds its environment, are **unverified**.
+fires in agent terminals, and whether the Copilot CLI shell loads profile files, are
+**unverified**. That the Copilot CLI passes its launch environment to commands is inferred from
+`--secret-env-vars`, which exists to remove inherited variables.
 
 **MCP.** VS Code reads `mcp.json` with `env`, `envFile`, and `${input:…}` variables whose values
 are "securely stored for subsequent use". Per-server sandboxing is opt-in with `sandboxEnabled`
@@ -493,13 +516,16 @@ choosing another path, so it depends on closing `keypick auto` and the key file 
   - Discourages: `forbidden` rules and `PreToolUse` denials keyed on command text.
 - **Copilot CLI**, as `.github/hooks/*.json` plus sandbox rules:
   - Enforces: local-sandbox deny rules for the key file and `.env` files; `postToolUse`
-    `modifiedResult` redaction; `preToolUse` hooks that fail closed on errors.
+    `modifiedResult` redaction; `preToolUse` hooks that fail closed on errors; `--secret-env-vars`
+    for variables that should never reach a command.
+  - Worth a closer look: sandbox masked env vars for HTTPS API keys, as with Claude Code.
   - Gap: local MCP servers run inside the sandbox by default, so a KeyPick MCP server would need
     an explicit grant for the key file, which the agent's own commands would then share unless
     the grant can be scoped to the server (**unverified**).
 - **Copilot in VS Code**, as `.github/hooks/*.json` plus sandbox settings:
-  - Enforces, best-effort: `PreToolUse` denials (Preview) and sandbox `deniedPaths` for the key
-    file and `.env` files, with `allowUnsandboxedCommands` set to `false`.
+  - Enforces, best-effort: `PreToolUse` denials (Preview). Sandbox `deniedPaths` for the key file
+    and `.env` files, with `allowUnsandboxedCommands` set to `false`, only in the Agent Host
+    harness and only once the user turns the sandbox on; the Local harness gets no sandbox.
   - Cannot do: redact output. The scrubbing has to live in `keypick run` or an MCP server.
 - **Shared hook script.** Codex and VS Code use Claude Code's `hookSpecificOutput` /
   `permissionDecision` shape. VS Code (with `chat.useClaudeHooks`) and the Cursor CLI read Claude
@@ -552,7 +578,13 @@ OpenAI Codex CLI (latest release `rust-v0.162.1`, 2026-10-09):
   (`ShellEnvironmentPolicy`),
   [`codex-rs/protocol/src/shell_environment.rs`](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/shell_environment.rs),
   [`codex-rs/core/config.schema.json`](https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json)
-  (`allow_login_shell`, `credential_broker`, `credential_masking`, `approval_mode`)
+  (`allow_login_shell`, `credential_broker`, `credential_masking`, `approval_mode`),
+  [`codex-rs/rmcp-client/src/utils.rs`](https://github.com/openai/codex/blob/main/codex-rs/rmcp-client/src/utils.rs)
+  (`create_env_for_mcp_server`),
+  [`codex-rs/features/src/lib.rs`](https://github.com/openai/codex/blob/main/codex-rs/features/src/lib.rs)
+  (`shell_snapshot`)
+- [PR #40466](https://github.com/openai/codex/pull/40466), credential brokering (merged 2026-08-24);
+  [issue #48096](https://github.com/openai/codex/issues/48096), environment filter leak (open)
 
 Cursor:
 
@@ -578,10 +610,13 @@ GitHub Copilot (VS Code pages dated 2026-10-07; GitHub docs undated):
   [Tools](https://code.visualstudio.com/docs/agents/run/tools),
   [MCP configuration reference](https://code.visualstudio.com/docs/agents/reference/mcp-configuration),
   [Terminal profiles](https://code.visualstudio.com/docs/terminal/profiles),
-  [Release notes 1.121](https://code.visualstudio.com/updates/v1_121) (2026-05-20)
+  [Release notes 1.121](https://code.visualstudio.com/updates/v1_121) (2026-05-20); source
+  [`toolCalling.tsx`](https://github.com/microsoft/vscode/blob/main/extensions/copilot/src/extension/prompts/node/panel/toolCalling.tsx)
+  (`PostToolUse` handling)
 - GitHub: [Hooks reference](https://docs.github.com/en/copilot/reference/hooks-configuration),
   [Allowing and denying tool use](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools),
   [Local sandboxing](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/understanding-local-sandboxing),
+  [Local sandbox settings](https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/configuring-local-sandbox-settings),
   [Using Copilot CLI](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli),
   [Content exclusion](https://docs.github.com/en/copilot/concepts/context/content-exclusion),
   [Cloud agent secrets and variables](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/configure-secrets-and-variables)
