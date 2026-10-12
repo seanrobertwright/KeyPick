@@ -21,33 +21,36 @@ const TRICKY_VALUE = "two  spaces   * star $HOME ${PATH} $(id) it's";
 let root: string;
 let env: NodeJS.ProcessEnv;
 
-function mustRun(cmd: string, args: string[], cwd?: string): string {
-  const result = spawnSync(cmd, args, { cwd, encoding: "utf8" });
+type RunResult = { stdout: string; stderr: string; status: number | null };
+
+/** Run a command with stdout piped (not a TTY). Throws only if it can't start. */
+function run(cmd: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): RunResult {
+  const result = spawnSync(cmd, args, { ...options, encoding: "utf8" });
   if (result.error) {
     throw new Error(`Could not run \`${cmd}\` (is it on PATH?): ${result.error.message}`);
   }
+  return { stdout: result.stdout, stderr: result.stderr, status: result.status };
+}
+
+function mustRun(cmd: string, args: string[], cwd?: string): string {
+  const result = run(cmd, args, { cwd });
   if (result.status !== 0) {
     throw new Error(`\`${cmd} ${args.join(" ")}\` exited ${result.status}:\n${result.stderr}`);
   }
   return result.stdout;
 }
 
-/** Run this checkout's CLI directly, with stdout piped (not a TTY). */
-function keypick(...args: string[]): { stdout: string; stderr: string; status: number | null } {
-  const result = spawnSync(process.execPath, [MAIN, ...args], { env, encoding: "utf8" });
-  if (result.error) throw new Error(`Could not run the CLI: ${result.error.message}`);
-  return { stdout: result.stdout, stderr: result.stderr, status: result.status };
+/** Run this checkout's CLI directly. */
+function keypick(...args: string[]): RunResult {
+  return run(process.execPath, [MAIN, ...args], { env });
 }
 
 /** Run a bash script in which `keypick` invokes this checkout's CLI. */
-function bash(script: string): { stdout: string; stderr: string; status: number | null } {
+function bash(script: string): RunResult {
   const prelude = 'keypick() { "$KEYPICK_TEST_BUN" "$KEYPICK_TEST_MAIN" "$@"; }\n';
-  const result = spawnSync("bash", ["-c", prelude + script], {
+  return run("bash", ["-c", prelude + script], {
     env: { ...env, KEYPICK_TEST_BUN: process.execPath, KEYPICK_TEST_MAIN: MAIN },
-    encoding: "utf8",
   });
-  if (result.error) throw new Error(`Could not run bash: ${result.error.message}`);
-  return { stdout: result.stdout, stderr: result.stderr, status: result.status };
 }
 
 beforeAll(() => {
