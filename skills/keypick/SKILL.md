@@ -35,7 +35,7 @@ eval "$(keypick auto Stripe OpenAI)" && node server.js
 eval "$(keypick auto Stripe)" && echo "STRIPE_API_KEY=${STRIPE_API_KEY:+set}"
 ```
 
-If a requested group holds a key whose name isn't a shell variable name, `auto` prints nothing to stdout, names each such key on stderr (never its value), and exits 1. The `eval` still succeeds and the chained command still runs, without those keys. Tell the user which keys stderr named; they fix them by editing the vault with `sops`, since KeyPick 0.2.x has no rename command.
+If a requested group holds a key whose name isn't a shell variable name, `auto` prints nothing to stdout, names each such key on stderr (never its value), and exits 1. The `eval` still succeeds and the chained command still runs, without those keys. Tell the user which keys stderr named; they fix them by editing the vault with `sops`, since KeyPick has no rename command.
 
 The `${VAR:+set}` form prints the literal word `set` only when the variable is populated — it never echoes the secret itself. **Never** use `env`, `printenv`, `set`, or `env | grep` to verify injection: those print the plaintext values into your tool output, which means the secret enters the conversation context.
 

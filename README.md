@@ -979,7 +979,7 @@ Nothing exported: eval could run these key names as shell commands.
   group "Evil": key "X=1;touch /tmp/marker;Y" is not a valid variable name (^[A-Za-z_][A-Za-z0-9_]*$)
 ```
 
-`keypick add` only stores valid names, but a hand-edited `vault.yaml` or another tool can store anything. `auto` and `extract` refuse such a vault rather than write a name that a shell or `.env` parser would misread. The message names each key or group, never a value. KeyPick 0.2.x has no rename command, so fix the names by editing the vault with sops:
+`keypick add` only stores valid names, but a hand-edited `vault.yaml` or another tool can store anything. `auto` and `extract` refuse such a vault rather than write a name that a shell or `.env` parser would misread. The message names each key or group, never a value. KeyPick has no rename command, so fix the names by editing the vault with sops:
 
 ```bash
 cd "$(keypick vault current)"

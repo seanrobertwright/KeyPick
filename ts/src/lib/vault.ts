@@ -536,7 +536,7 @@ export class UnsafeVaultContentError extends Error {
     super(
       [
         ...problems.map((p) => `  ${p}`),
-        "Fix the vault by editing it with sops: run `sops vault.yaml` in the folder `keypick vault current` prints. KeyPick 0.2.x has no rename command.",
+        "Fix the vault by editing it with sops: run `sops vault.yaml` in the folder `keypick vault current` prints. KeyPick has no rename command.",
       ].join("\n"),
     );
     this.name = "UnsafeVaultContentError";
