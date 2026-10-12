@@ -209,10 +209,14 @@ function discoverChildVaults(base: string, label: string): string[] {
 
 async function chooseVaultInteractively(candidates: string[], source: string): Promise<string | null> {
   try {
-    const selected = await select({
-      message: `Select a KeyPick vault from ${source}:`,
-      choices: candidates.map((c) => ({ value: c, name: c })),
-    });
+    // Render on stderr: `keypick auto` can reach this picker, and its stdout is eval'd.
+    const selected = await select(
+      {
+        message: `Select a KeyPick vault from ${source}:`,
+        choices: candidates.map((c) => ({ value: c, name: c })),
+      },
+      { output: process.stderr },
+    );
     return selected;
   } catch {
     throw new Error(

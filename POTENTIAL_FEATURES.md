@@ -20,7 +20,7 @@ team instead of just one developer across multiple machines. KeyPick today is
 a single-user, multi-machine tool: SOPS-encrypted `vault.yaml` in a private git
 repo, age keys per machine, Windows Hello / Touch ID / polkit biometric gate,
 multi-vault support, and a Claude Code skill that injects secrets via
-`eval $(keypick auto GroupName)`.
+`eval "$(keypick auto GroupName)"`.
 
 The framing we're running with: start with a specific team as a design
 partner, and if it works well, consider generalizing. Full audit logging /
@@ -227,7 +227,7 @@ two real machines:
 6. Repeat with scoped vaults (tier 2) — B gets added to dev only, confirm
    B cannot decrypt `vault-prod.yaml`.
 7. Claude Code skill: from within User B's machine, verify
-   `eval $(keypick auto Staging) && echo "KEY=${SOME_KEY:+set}"` works
+   `eval "$(keypick auto Staging)" && echo "KEY=${SOME_KEY:+set}"` works
    and does not leak to conversation context.
 
 Anything short of this two-human test is self-deception.

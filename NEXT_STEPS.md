@@ -282,7 +282,7 @@ Invoke-Expression "$(direnv hook pwsh)"
 
 ```bash
 # my-project/.envrc
-eval $(keypick auto Supabase_Prod Google_AI)
+eval "$(keypick auto Supabase_Prod Google_AI)"
 ```
 
 Then authorize it once:
