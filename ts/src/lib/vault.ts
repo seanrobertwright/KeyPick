@@ -501,7 +501,7 @@ export type Group = [name: string, keys: Record<string, string>];
  * output.
  */
 export function groupsToExports(groups: Group[]): string {
-  refuseUnsafe(groups.flatMap(([name, keys]) => inGroup(name, invalidKeyNames(keys))));
+  refuseUnsafe(groups.flatMap(([name, keys]) => prefixWithGroup(name, invalidKeyNames(keys))));
   return groups.map(([, keys]) => keysToExports(keys)).join("");
 }
 
@@ -519,7 +519,7 @@ export function groupsToEnv(groups: Group[]): string {
   refuseUnsafe(
     groups.flatMap(([name, keys]) => [
       ...(hasControlCharacter(name) ? [`group ${quoteName(name)} has a control character in its name`] : []),
-      ...inGroup(name, [...invalidKeyNames(keys), ...multilineValues(keys)]),
+      ...prefixWithGroup(name, [...invalidKeyNames(keys), ...multilineValues(keys)]),
     ]),
   );
   return groups.map(([name, keys]) => `# --- ${name} ---\n${keysToEnv(keys)}\n`).join("");
@@ -558,7 +558,7 @@ function multilineValues(keys: Record<string, string>): string[] {
     .map((k) => `key ${quoteName(k)} has a line break in its value`);
 }
 
-function inGroup(group: string, problems: string[]): string[] {
+function prefixWithGroup(group: string, problems: string[]): string[] {
   return problems.map((p) => `group ${quoteName(group)}: ${p}`);
 }
 
