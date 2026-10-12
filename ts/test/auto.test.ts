@@ -183,6 +183,16 @@ describe("keypick auto with a key name that isn't a shell variable name", () => 
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain('"X=1;touch keypick-marker;Y"');
+    expect(result.stderr).toContain("editing it with sops");
+    expect(result.stderr).not.toContain(EVIL_VALUE);
+  });
+
+  test("exports nothing, not even the valid groups requested alongside it", () => {
+    const result = keypick("auto", "Test", "Evil");
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).not.toContain(GOOD_VALUE);
     expect(result.stderr).not.toContain(EVIL_VALUE);
   });
 });
