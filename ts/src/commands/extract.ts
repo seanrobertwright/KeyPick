@@ -32,19 +32,22 @@ export async function run(): Promise<void> {
     return;
   }
 
+  const found: vault.Group[] = [];
+  for (const group of selected) {
+    const keys = vault.groupKeys(data.services, group);
+    if (keys) found.push([group, keys]);
+  }
+
   let envContent: string;
   try {
-    envContent = vault.groupsToEnv(data.services, selected);
+    envContent = vault.groupsToEnv(found);
   } catch (e) {
     if (!(e instanceof vault.UnsafeVaultContentError)) throw e;
     console.error(`${ENV_FILE} not written: these names or values would corrupt it.\n${e.message}`);
     terminal.cleanupAndExit(1);
   }
 
-  let totalKeys = 0;
-  for (const group of selected) {
-    totalKeys += Object.keys(vault.groupKeys(data.services, group) ?? {}).length;
-  }
+  const totalKeys = found.reduce((total, [, keys]) => total + Object.keys(keys).length, 0);
 
   try {
     writeFileSync(ENV_FILE, envContent);

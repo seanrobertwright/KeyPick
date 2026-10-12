@@ -490,68 +490,39 @@ export async function save(vault: VaultData): Promise<void> {
 // Formatting helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Format a group's keys as KEY=VALUE lines suitable for a .env file.
- * Keys are emitted in sorted order.
- *
- * Throws UnsafeVaultContentError, and returns nothing, if any key name is not
- * a valid shell variable name or any value contains a line break. Values are
- * written unquoted, so a line break would start another variable.
- */
-export function keysToEnv(keys: Record<string, string>): string {
-  refuseUnsafe([...invalidKeyNames(keys), ...multilineValues(keys)]);
-  return Object.keys(keys)
-    .sort()
-    .map((k) => `${k}=${keys[k]}\n`)
-    .join("");
-}
-
-/**
- * Format a group's keys as `export KEY='VALUE'` lines suitable for shell eval.
- * Keys are emitted in sorted order.
- *
- * Throws UnsafeVaultContentError, and returns nothing, if any key name is not
- * a valid shell variable name.
- */
-export function keysToExports(keys: Record<string, string>): string {
-  refuseUnsafe(invalidKeyNames(keys));
-  return Object.keys(keys)
-    .sort()
-    .map((k) => `export ${k}='${keys[k]!.replace(/'/g, "'\\''")}'\n`)
-    .join("");
-}
+/** A group the vault has: its name and its keys. */
+export type Group = [name: string, keys: Record<string, string>];
 
 /**
  * The `export` lines `keypick auto` prints for `groups`, in the order given.
- * Groups the vault doesn't have are skipped.
  *
- * Throws one UnsafeVaultContentError naming every unsafe key in every group,
- * so a refusal never returns partial output.
+ * Throws one UnsafeVaultContentError naming every key name, in every group,
+ * that isn't a valid shell variable name, so a refusal never returns partial
+ * output.
  */
-export function groupsToExports(services: VaultData["services"], groups: string[]): string {
-  const found = groups.filter((group) => groupKeys(services, group));
-  refuseUnsafe(found.flatMap((group) => inGroup(group, invalidKeyNames(services[group]!))));
-  return found.map((group) => keysToExports(services[group]!)).join("");
+export function groupsToExports(groups: Group[]): string {
+  refuseUnsafe(groups.flatMap(([name, keys]) => inGroup(name, invalidKeyNames(keys))));
+  return groups.map(([, keys]) => keysToExports(keys)).join("");
 }
 
 /**
  * The .env text `keypick extract` writes for `groups`, in the order given:
  * a `# --- <group> ---` header, the group's KEY=VALUE lines, and a blank line.
- * Groups the vault doesn't have are skipped.
  *
  * Throws one UnsafeVaultContentError naming every group whose name contains a
- * control character and every unsafe key in every group, so a refusal never
- * returns partial output.
+ * control character, every key name that isn't a valid shell variable name,
+ * and every key whose value contains a line break, so a refusal never returns
+ * partial output. Values are written unquoted, so a line break would start
+ * another variable.
  */
-export function groupsToEnv(services: VaultData["services"], groups: string[]): string {
-  const found = groups.filter((group) => groupKeys(services, group));
+export function groupsToEnv(groups: Group[]): string {
   refuseUnsafe(
-    found.flatMap((group) => [
-      ...(hasControlCharacter(group) ? [`group ${quoteName(group)} has a control character in its name`] : []),
-      ...inGroup(group, [...invalidKeyNames(services[group]!), ...multilineValues(services[group]!)]),
+    groups.flatMap(([name, keys]) => [
+      ...(hasControlCharacter(name) ? [`group ${quoteName(name)} has a control character in its name`] : []),
+      ...inGroup(name, [...invalidKeyNames(keys), ...multilineValues(keys)]),
     ]),
   );
-  return found.map((group) => `# --- ${group} ---\n${keysToEnv(services[group]!)}\n`).join("");
+  return groups.map(([name, keys]) => `# --- ${name} ---\n${keysToEnv(keys)}\n`).join("");
 }
 
 /**
@@ -589,6 +560,28 @@ function multilineValues(keys: Record<string, string>): string[] {
 
 function inGroup(group: string, problems: string[]): string[] {
   return problems.map((p) => `group ${quoteName(group)}: ${p}`);
+}
+
+/**
+ * Format a group's keys as KEY=VALUE lines suitable for a .env file.
+ * Keys are emitted in sorted order. Unchecked: groupsToEnv refuses unsafe keys first.
+ */
+function keysToEnv(keys: Record<string, string>): string {
+  return Object.keys(keys)
+    .sort()
+    .map((k) => `${k}=${keys[k]}\n`)
+    .join("");
+}
+
+/**
+ * Format a group's keys as `export KEY='VALUE'` lines suitable for shell eval.
+ * Keys are emitted in sorted order. Unchecked: groupsToExports refuses unsafe keys first.
+ */
+function keysToExports(keys: Record<string, string>): string {
+  return Object.keys(keys)
+    .sort()
+    .map((k) => `export ${k}='${keys[k]!.replace(/'/g, "'\\''")}'\n`)
+    .join("");
 }
 
 function refuseUnsafe(problems: string[]): void {

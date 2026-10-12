@@ -2,7 +2,7 @@
 // `keypick extract` is interactive, so its .env output is tested here.
 
 import { describe, expect, test } from "bun:test";
-import { UnsafeVaultContentError, groupsToEnv, groupsToExports, keysToEnv } from "../src/lib/vault.ts";
+import { UnsafeVaultContentError, groupsToEnv, groupsToExports } from "../src/lib/vault.ts";
 
 const SECRET = "s3cret-value";
 
@@ -17,9 +17,18 @@ function refusal(emit: () => string): UnsafeVaultContentError {
   throw new Error("expected the emitter to refuse");
 }
 
-describe("keysToEnv", () => {
+describe("groupsToEnv", () => {
+  test("writes each group's header and sorted keys, unchanged for a valid vault", () => {
+    expect(
+      groupsToEnv([
+        ["Beta", { Z_KEY: "z", A_KEY: "a b" }],
+        ["Alpha", { ONE: "1" }],
+      ]),
+    ).toBe("# --- Beta ---\nA_KEY=a b\nZ_KEY=z\n\n# --- Alpha ---\nONE=1\n\n");
+  });
+
   test("refuses a key name that isn't a variable name, naming it without its value", () => {
-    const error = refusal(() => keysToEnv({ GOOD: "fine", "BAD=1\nINJECTED": SECRET }));
+    const error = refusal(() => groupsToEnv([["Group", { GOOD: "fine", "BAD=1\nINJECTED": SECRET }]]));
 
     expect(error.problems).toHaveLength(1);
     expect(error.message).toContain('"BAD=1\\nINJECTED"');
@@ -30,25 +39,12 @@ describe("keysToEnv", () => {
     ["a newline", `${SECRET}\nINJECTED=1`],
     ["a carriage return", `${SECRET}\rINJECTED=1`],
   ])("refuses a value containing %s, naming the key without its value", (_label, value) => {
-    const error = refusal(() => keysToEnv({ GOOD: "fine", MULTILINE: value }));
+    const error = refusal(() => groupsToEnv([["Group", { GOOD: "fine", MULTILINE: value }]]));
 
     expect(error.problems).toHaveLength(1);
     expect(error.message).toContain('"MULTILINE"');
     expect(error.message).not.toContain(SECRET);
     expect(error.message).not.toContain("INJECTED");
-  });
-});
-
-describe("groupsToEnv", () => {
-  test("writes each group's header and sorted keys, unchanged for a valid vault", () => {
-    const services = {
-      Beta: { Z_KEY: "z", A_KEY: "a b" },
-      Alpha: { ONE: "1" },
-    };
-
-    expect(groupsToEnv(services, ["Beta", "Alpha"])).toBe(
-      "# --- Beta ---\nA_KEY=a b\nZ_KEY=z\n\n# --- Alpha ---\nONE=1\n\n",
-    );
   });
 
   test.each([
@@ -56,7 +52,12 @@ describe("groupsToEnv", () => {
     ["Evil\u001b[2J", '"Evil\\u001b[2J"'],
     ["Evil\u009b", '"Evil\\u009b"'],
   ])("refuses the group name %j, which contains a control character", (group, quoted) => {
-    const error = refusal(() => groupsToEnv({ Fine: { OK: "ok" }, [group]: { KEY: SECRET } }, ["Fine", group]));
+    const error = refusal(() =>
+      groupsToEnv([
+        ["Fine", { OK: "ok" }],
+        [group, { KEY: SECRET }],
+      ]),
+    );
 
     expect(error.problems).toHaveLength(1);
     expect(error.message).toContain(quoted);
@@ -64,12 +65,12 @@ describe("groupsToEnv", () => {
   });
 
   test("names every problem in every requested group", () => {
-    const services = {
-      "Bad\tGroup": { "BAD-KEY": SECRET },
-      Other: { OK: "ok", MULTI: `${SECRET}\n` },
-    };
-
-    const error = refusal(() => groupsToEnv(services, ["Bad\tGroup", "Other"]));
+    const error = refusal(() =>
+      groupsToEnv([
+        ["Bad\tGroup", { "BAD-KEY": SECRET }],
+        ["Other", { OK: "ok", MULTI: `${SECRET}\n` }],
+      ]),
+    );
 
     expect(error.problems).toEqual([
       'group "Bad\\tGroup" has a control character in its name',
@@ -82,20 +83,21 @@ describe("groupsToEnv", () => {
 
 describe("groupsToExports", () => {
   test("writes sorted export lines, unchanged for a valid vault", () => {
-    const services = { Beta: { Z_KEY: "z", A_KEY: "it's" }, Alpha: { ONE: "1" } };
-
-    expect(groupsToExports(services, ["Beta", "Alpha"])).toBe(
-      "export A_KEY='it'\\''s'\nexport Z_KEY='z'\nexport ONE='1'\n",
-    );
+    expect(
+      groupsToExports([
+        ["Beta", { Z_KEY: "z", A_KEY: "it's" }],
+        ["Alpha", { ONE: "1" }],
+      ]),
+    ).toBe("export A_KEY='it'\\''s'\nexport Z_KEY='z'\nexport ONE='1'\n");
   });
 
   test("names every bad key in every requested group and returns nothing", () => {
-    const services = {
-      First: { GOOD: "fine", "1ST": SECRET },
-      Second: { "X=1;id;Y": SECRET },
-    };
-
-    const error = refusal(() => groupsToExports(services, ["First", "Second"]));
+    const error = refusal(() =>
+      groupsToExports([
+        ["First", { GOOD: "fine", "1ST": SECRET }],
+        ["Second", { "X=1;id;Y": SECRET }],
+      ]),
+    );
 
     expect(error.problems).toEqual([
       'group "First": key "1ST" is not a valid variable name (^[A-Za-z_][A-Za-z0-9_]*$)',

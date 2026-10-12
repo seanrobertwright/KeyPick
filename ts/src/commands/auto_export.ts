@@ -20,10 +20,11 @@ export async function run(groups: string[]): Promise<void> {
   }
 
   const data = await vault.load();
-  const found: string[] = [];
+  const found: vault.Group[] = [];
   for (const group of groups) {
-    if (vault.groupKeys(data.services, group)) {
-      found.push(group);
+    const keys = vault.groupKeys(data.services, group);
+    if (keys) {
+      found.push([group, keys]);
     } else {
       console.error(`Warning: group '${group}' not found in vault.`);
     }
@@ -31,7 +32,7 @@ export async function run(groups: string[]): Promise<void> {
 
   let output: string;
   try {
-    output = vault.groupsToExports(data.services, found);
+    output = vault.groupsToExports(found);
   } catch (e) {
     if (!(e instanceof vault.UnsafeVaultContentError)) throw e;
     console.error(`Nothing exported: eval could run these key names as shell commands.\n${e.message}`);
