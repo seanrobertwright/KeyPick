@@ -86,7 +86,10 @@ export async function run(): Promise<void> {
   await vault.save(data);
   const dir = await vault.vaultDir();
   console.log(chalk.green.bold("  ✓ Vault updated successfully."));
+  // The hint is a command to paste into a shell. An existing group's name
+  // may hold shell syntax, so only names that pass the new-group rule go in.
+  const commitMessage = groupNameProblem(groupName) === null ? `Update ${groupName}` : "Update vault";
   console.log(
-    `\n  ${chalk.dim("Remember to sync:")} cd ${dir} && git add vault.yaml && git commit -m "Update ${groupName}" && git push`,
+    `\n  ${chalk.dim("Remember to sync:")} cd ${dir} && git add vault.yaml && git commit -m "${commitMessage}" && git push`,
   );
 }
