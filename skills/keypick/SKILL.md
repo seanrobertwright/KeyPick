@@ -11,7 +11,7 @@ KeyPick is a biometric-secured API key vault. Use it to inject keys into command
 
 | Goal | Command | Auth required? |
 |------|---------|---------------|
-| Inject keys into current shell | `eval $(keypick auto <Group>)` | No |
+| Inject keys into current shell | `eval "$(keypick auto <Group>)"` | No |
 | List all groups and key names | `keypick list` | Yes (biometric) |
 | Add or update keys | `keypick add` | Yes (biometric) |
 | Copy one key to clipboard | `keypick copy` | Yes (biometric) |
@@ -22,17 +22,17 @@ KeyPick is a biometric-secured API key vault. Use it to inject keys into command
 
 ## Injecting keys before a command
 
-`keypick auto <Group> [Group2 ...]` is the non-interactive path — no biometric prompt, designed for scripting. It prints `export KEY='VALUE'` lines to stdout.
+`keypick auto <Group> [Group2 ...]` is the non-interactive path — no biometric prompt, designed for scripting. It prints only `export KEY='VALUE'` lines to stdout; warnings such as a missing group go to stderr and never include values. Keep the double quotes around `$(…)`: without them the shell collapses runs of spaces in values and expands globs such as `*`.
 
 ```bash
 # Inject one group, then run the command
-eval $(keypick auto OpenAI) && python script.py
+eval "$(keypick auto OpenAI)" && python script.py
 
 # Inject multiple groups at once
-eval $(keypick auto Stripe OpenAI) && node server.js
+eval "$(keypick auto Stripe OpenAI)" && node server.js
 
 # Verify a key is present WITHOUT revealing its value
-eval $(keypick auto Stripe) && echo "STRIPE_API_KEY=${STRIPE_API_KEY:+set}"
+eval "$(keypick auto Stripe)" && echo "STRIPE_API_KEY=${STRIPE_API_KEY:+set}"
 ```
 
 The `${VAR:+set}` form prints the literal word `set` only when the variable is populated — it never echoes the secret itself. **Never** use `env`, `printenv`, `set`, or `env | grep` to verify injection: those print the plaintext values into your tool output, which means the secret enters the conversation context.
@@ -46,7 +46,7 @@ The `${VAR:+set}` form prints the literal word `set` only when the variable is p
 The standard pattern for any Bash tool invocation that requires secrets:
 
 ```bash
-eval $(keypick auto <Group>) && <the actual command>
+eval "$(keypick auto <Group>)" && <the actual command>
 ```
 
 Prefer this over a multi-step approach — it keeps keys scoped to that single subshell invocation and they don't linger in the environment.
@@ -81,7 +81,7 @@ If installed but not set up: `keypick setup`
 
 ## Security notes — keeping secrets out of AI context
 
-The `eval $(keypick auto …) && <command>` idiom is safe *by construction*: `$(…)` captures the `export` lines so they never reach your tool's stdout, and the subshell dies when the command finishes. That guarantee is fragile — it only holds if you don't do any of the following.
+The `eval "$(keypick auto …)" && <command>` idiom is safe *by construction*: `$(…)` captures the `export` lines so they never reach your tool's stdout, and the subshell dies when the command finishes. That guarantee is fragile — it only holds if you don't do any of the following.
 
 **Hard rules — these commands leak plaintext into the conversation:**
 
@@ -89,10 +89,11 @@ The `eval $(keypick auto …) && <command>` idiom is safe *by construction*: `$(
 - Do **not** `cat`, `Read`, `Grep`, or otherwise ingest `.env`, `.envrc`, `.env.local`, or any file that may contain plaintext secrets — including files produced by `keypick extract`. Treat those files as write-only from the AI's perspective: created for the user's process, never read back.
 - Do **not** run commands that print env vars as part of their own output (e.g., `node -e 'console.log(process.env)'`, debug middleware that dumps config, verbose CI loggers). If a script fails and the error includes env dumps, stop and tell the user rather than pasting the output back.
 - Do **not** use `set -x`, `bash -x`, or other shell trace modes while secrets are in scope — trace output expands `eval` and prints the values.
+- Do **not** run `keypick auto` on its own, outside `eval "$(…)"`, even to debug an injection that didn't work — its stdout *is* the plaintext `export` lines. Rerun the `eval` form and read its stderr instead: missing-group warnings go there and never include values.
 
 **Preferred patterns:**
 
-- Prefer `eval $(keypick auto …) && <command>` over `export`-ing into a persistent shell session — the subshell scope is the isolation.
+- Prefer `eval "$(keypick auto …)" && <command>` over `export`-ing into a persistent shell session — the subshell scope is the isolation.
 - When the user only needs *one* value for their own use (pasting into a dashboard, a config UI, etc.), suggest `keypick copy` instead of `keypick extract`. `copy` puts the value on the OS clipboard and never writes plaintext to disk.
 - When you must verify injection worked, use `echo "KEY=${KEY:+set}"` — prints the literal word `set` without revealing the value.
 

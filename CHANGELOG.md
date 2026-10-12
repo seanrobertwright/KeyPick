@@ -5,6 +5,32 @@ All notable changes to KeyPick are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`eval $(keypick auto …)` set no variables** (#3). The ASCII banner
+  printed to stdout before `auto`'s output, and `auto` wrote a `# <Group>`
+  line before each group, which hid every later `export` once unquoted
+  `$(…)` collapsed the output onto one line. `auto` now writes only
+  `export` lines to stdout. The banner appears only for the no-argument
+  interactive menu when stdout is a terminal, so subcommands, `--version`,
+  and `--help` no longer print it.
+
+### Docs
+
+- `README.md`, the Claude Code skill, and the `auto` source comment now use
+  the quoted form `eval "$(keypick auto …)"`, which keeps runs of spaces in
+  values and doesn't glob-expand them.
+- The skill tells agents not to run `keypick auto` bare to debug a failed
+  injection, since its stdout is the plaintext `export` lines.
+
+### Tests
+
+- Added a `bun test` integration suite (`bun run test` in `ts/`) that builds a
+  throwaway sops/age vault and evaluates `keypick auto` output through bash.
+  CI installs sops and age and runs it.
+
 ## [0.2.2] — 2026-04-18
 
 ### Security
@@ -74,6 +100,7 @@ no release tag required.
 - Drop `-NonInteractive` from the Windows Hello spawn so the prompt can
   actually take input (9de1bcf).
 
+[Unreleased]: https://github.com/seanrobertwright/KeyPick/compare/v0.2.3...HEAD
 [0.2.2]: https://github.com/seanrobertwright/KeyPick/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/seanrobertwright/KeyPick/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/seanrobertwright/KeyPick/releases/tag/v0.2.0

@@ -722,13 +722,15 @@ Select a group, then a key. The value is copied to your clipboard without ever b
 keypick auto Supabase_Prod Google_AI
 ```
 
-Outputs `export KEY='VALUE'` statements to stdout. Designed for use with [direnv](https://direnv.net/):
+Outputs only `export KEY='VALUE'` statements to stdout; warnings such as a missing group go to stderr. Designed for use with [direnv](https://direnv.net/):
 
 **Create a `.envrc` in your project:**
 ```bash
 # my-project/.envrc
-eval $(keypick auto Supabase_Prod Google_AI)
+eval "$(keypick auto Supabase_Prod Google_AI)"
 ```
+
+Keep the double quotes around `$(…)`. Without them the shell collapses runs of spaces inside values and expands globs such as `*`.
 
 **Allow it once:**
 ```bash
