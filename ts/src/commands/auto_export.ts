@@ -22,7 +22,7 @@ export async function run(groups: string[]): Promise<void> {
   const data = await vault.load();
   const found: string[] = [];
   for (const group of groups) {
-    if (Object.hasOwn(data.services, group)) {
+    if (vault.groupKeys(data.services, group)) {
       found.push(group);
     } else {
       console.error(`Warning: group '${group}' not found in vault.`);

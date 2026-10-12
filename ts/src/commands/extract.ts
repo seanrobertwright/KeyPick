@@ -43,7 +43,7 @@ export async function run(): Promise<void> {
 
   let totalKeys = 0;
   for (const group of selected) {
-    if (Object.hasOwn(data.services, group)) totalKeys += Object.keys(data.services[group]!).length;
+    totalKeys += Object.keys(vault.groupKeys(data.services, group) ?? {}).length;
   }
 
   try {

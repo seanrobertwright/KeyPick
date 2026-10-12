@@ -25,7 +25,7 @@ export async function run(): Promise<void> {
     terminal.cleanupAndExit(0);
   }
 
-  const keysMap = Object.hasOwn(data.services, group) ? data.services[group]! : {};
+  const keysMap = vault.groupKeys(data.services, group) ?? {};
   const keyNames = Object.keys(keysMap).sort();
 
   let key: string;

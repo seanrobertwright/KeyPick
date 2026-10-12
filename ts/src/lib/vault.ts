@@ -30,6 +30,16 @@ export function emptyVault(): VaultData {
   return { services: {} };
 }
 
+/**
+ * The keys of group `name`, or undefined if the vault has no such group.
+ * Only own properties count, so `constructor` or `__proto__` is never a group.
+ * A falsy value, such as the null YAML gives a group with nothing under it,
+ * counts as no group.
+ */
+export function groupKeys(services: VaultData["services"], name: string): Record<string, string> | undefined {
+  return Object.hasOwn(services, name) ? services[name] || undefined : undefined;
+}
+
 const VAULT_FILE = "vault.yaml";
 const SOPS_FILE = ".sops.yaml";
 const APP_DIR = "keypick";
@@ -519,7 +529,7 @@ export function keysToExports(keys: Record<string, string>): string {
  * so a refusal never returns partial output.
  */
 export function groupsToExports(services: VaultData["services"], groups: string[]): string {
-  const found = groups.filter((group) => Object.hasOwn(services, group));
+  const found = groups.filter((group) => groupKeys(services, group));
   refuseUnsafe(found.flatMap((group) => inGroup(group, invalidKeyNames(services[group]!))));
   return found.map((group) => keysToExports(services[group]!)).join("");
 }
@@ -534,7 +544,7 @@ export function groupsToExports(services: VaultData["services"], groups: string[
  * returns partial output.
  */
 export function groupsToEnv(services: VaultData["services"], groups: string[]): string {
-  const found = groups.filter((group) => Object.hasOwn(services, group));
+  const found = groups.filter((group) => groupKeys(services, group));
   refuseUnsafe(
     found.flatMap((group) => [
       ...(hasControlCharacter(group) ? [`group ${quoteName(group)} has a control character in its name`] : []),

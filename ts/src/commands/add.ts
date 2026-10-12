@@ -38,8 +38,7 @@ export async function run(): Promise<void> {
     groupName = groupChoice;
   }
 
-  if (!Object.hasOwn(data.services, groupName)) data.services[groupName] = {};
-  const entry = data.services[groupName]!;
+  const entry = vault.groupKeys(data.services, groupName) ?? (data.services[groupName] = {});
 
   console.log(
     `\n  ${chalk.dim("Adding keys to group:")} ${chalk.cyan.bold(groupName)}\n  ${chalk.dim("Leave 'Key Name' blank to finish.")}\n`,

@@ -83,6 +83,8 @@ beforeAll(() => {
         Test: { GOOD_KEY: GOOD_VALUE },
         Tricky: { TRICKY_KEY: TRICKY_VALUE },
         Evil: { [EVIL_KEY]: EVIL_VALUE },
+        // What YAML gives a group whose last key was deleted by hand.
+        Empty: null,
       },
     }),
   );
@@ -159,6 +161,14 @@ describe("keypick auto", () => {
       expect(result.stderr).toContain(`Warning: group '${group}' not found in vault.`);
     },
   );
+
+  test("reports a group stored as null as not found and exports the others", () => {
+    const result = keypick("auto", "Empty", "Test");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("export GOOD_KEY='good-value'\n");
+    expect(result.stderr).toContain("Warning: group 'Empty' not found in vault.");
+  });
 
   test("with no groups, prints usage to stderr and nothing to stdout", () => {
     const result = keypick("auto");
