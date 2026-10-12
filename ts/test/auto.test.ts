@@ -8,7 +8,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -17,6 +17,10 @@ const MAIN = path.resolve(import.meta.dir, "../src/main.ts");
 const GOOD_VALUE = "good-value";
 // Repeated spaces, a glob, shell expansions, and a single quote.
 const TRICKY_VALUE = "two  spaces   * star $HOME ${PATH} $(id) it's";
+// The issue's repro: a key name that runs `touch` when its export line is eval'd.
+const MARKER = "keypick-marker";
+const EVIL_KEY = `X=1;touch ${MARKER};Y`;
+const EVIL_VALUE = "evil-value";
 
 let root: string;
 let vaultDir: string;
@@ -47,9 +51,10 @@ function keypick(...args: string[]): RunResult {
 }
 
 /** Run a bash script in which `keypick` invokes this checkout's CLI. */
-function bash(script: string): RunResult {
+function bash(script: string, cwd?: string): RunResult {
   const prelude = 'keypick() { "$KEYPICK_TEST_BUN" "$KEYPICK_TEST_MAIN" "$@"; }\n';
   return run("bash", ["-c", prelude + script], {
+    cwd,
     env: { ...env, KEYPICK_TEST_BUN: process.execPath, KEYPICK_TEST_MAIN: MAIN },
   });
 }
@@ -77,6 +82,7 @@ beforeAll(() => {
       services: {
         Test: { GOOD_KEY: GOOD_VALUE },
         Tricky: { TRICKY_KEY: TRICKY_VALUE },
+        Evil: { [EVIL_KEY]: EVIL_VALUE },
       },
     }),
   );
@@ -149,6 +155,24 @@ describe("keypick auto", () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("Usage: keypick auto <Group1> [Group2 ...]");
+  });
+});
+
+describe("keypick auto with a key name that isn't a shell variable name", () => {
+  test("the issue's repro runs no command", () => {
+    const result = bash(`eval "$(keypick auto Evil | grep '^export')"`, root);
+
+    expect(result.status).toBe(0);
+    expect(existsSync(path.join(root, MARKER))).toBe(false);
+  });
+
+  test("exits 1 with empty stdout, naming the key on stderr without its value", () => {
+    const result = keypick("auto", "Evil");
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain('"X=1;touch keypick-marker;Y"');
+    expect(result.stderr).not.toContain(EVIL_VALUE);
   });
 });
 

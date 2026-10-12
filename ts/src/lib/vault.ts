@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import YAML from "yaml";
 import { select } from "@inquirer/prompts";
 import * as terminal from "./terminal.ts";
+import { VARIABLE_NAME, isVariableName, quoteName } from "./names.ts";
 
 /**
  * In-memory representation of vault.yaml.
@@ -493,10 +494,76 @@ export function keysToEnv(keys: Record<string, string>): string {
 /**
  * Format a group's keys as `export KEY='VALUE'` lines suitable for shell eval.
  * Keys are emitted in sorted order.
+ *
+ * Throws UnsafeVaultContentError, and returns nothing, if any key name is not
+ * a valid shell variable name.
  */
 export function keysToExports(keys: Record<string, string>): string {
+  refuseUnsafe(invalidKeyNames(keys));
   return Object.keys(keys)
     .sort()
     .map((k) => `export ${k}='${keys[k]!.replace(/'/g, "'\\''")}'\n`)
     .join("");
+}
+
+/**
+ * The `export` lines `keypick auto` prints for `groups`, in the order given.
+ * Groups the vault doesn't have are skipped.
+ *
+ * Throws one UnsafeVaultContentError naming every unsafe key in every group,
+ * so a refusal never returns partial output.
+ */
+export function groupsToExports(services: VaultData["services"], groups: string[]): string {
+  return emitGroups(services, groups, (_group, keys) => keysToExports(keys));
+}
+
+/**
+ * Thrown by the emitters when vault content can't be written safely. Each
+ * entry in `problems` names a group or key, JSON-escaped, and never a value.
+ */
+export class UnsafeVaultContentError extends Error {
+  readonly problems: string[];
+
+  constructor(problems: string[]) {
+    super(
+      [
+        ...problems.map((p) => `  ${p}`),
+        "Fix the vault by editing it with sops: run `sops vault.yaml` in the folder `keypick vault current` prints. KeyPick 0.2.x has no rename command.",
+      ].join("\n"),
+    );
+    this.name = "UnsafeVaultContentError";
+    this.problems = problems;
+  }
+}
+
+function invalidKeyNames(keys: Record<string, string>): string[] {
+  return Object.keys(keys)
+    .sort()
+    .filter((k) => !isVariableName(k))
+    .map((k) => `key ${quoteName(k)} is not a valid variable name (${VARIABLE_NAME.source})`);
+}
+
+function refuseUnsafe(problems: string[]): void {
+  if (problems.length > 0) throw new UnsafeVaultContentError(problems);
+}
+
+function emitGroups(
+  services: VaultData["services"],
+  groups: string[],
+  emit: (group: string, keys: Record<string, string>) => string,
+): string {
+  const problems: string[] = [];
+  let output = "";
+  for (const group of groups) {
+    const keys = services[group];
+    if (!keys) continue;
+    try {
+      output += emit(group, keys);
+    } catch (e) {
+      if (!(e instanceof UnsafeVaultContentError)) throw e;
+      problems.push(...e.problems.map((p) => `group ${quoteName(group)}: ${p}`));
+    }
+  }
+  refuseUnsafe(problems);
+  return output;
 }
