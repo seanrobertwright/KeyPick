@@ -8,6 +8,11 @@ export function isVariableName(name: string): boolean {
   return VARIABLE_NAME.test(name);
 }
 
+/** True if `name` contains a C0 or C1 control character or DEL, such as a newline or ESC. */
+export function hasControlCharacter(name: string): boolean {
+  return /\p{Cc}/u.test(name);
+}
+
 /**
  * Quote a name for a message: JSON string escaping, plus `\u` escapes for DEL
  * and the C1 controls, which JSON leaves raw, so a name can't break a line or

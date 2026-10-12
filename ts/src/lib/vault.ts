@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import YAML from "yaml";
 import { select } from "@inquirer/prompts";
 import * as terminal from "./terminal.ts";
-import { VARIABLE_NAME, isVariableName, quoteName } from "./names.ts";
+import { VARIABLE_NAME, hasControlCharacter, isVariableName, quoteName } from "./names.ts";
 
 /**
  * In-memory representation of vault.yaml.
@@ -483,8 +483,13 @@ export async function save(vault: VaultData): Promise<void> {
 /**
  * Format a group's keys as KEY=VALUE lines suitable for a .env file.
  * Keys are emitted in sorted order.
+ *
+ * Throws UnsafeVaultContentError, and returns nothing, if any key name is not
+ * a valid shell variable name or any value contains a line break. Values are
+ * written unquoted, so a line break would start another variable.
  */
 export function keysToEnv(keys: Record<string, string>): string {
+  refuseUnsafe([...invalidKeyNames(keys), ...multilineValues(keys)]);
   return Object.keys(keys)
     .sort()
     .map((k) => `${k}=${keys[k]}\n`)
@@ -514,7 +519,29 @@ export function keysToExports(keys: Record<string, string>): string {
  * so a refusal never returns partial output.
  */
 export function groupsToExports(services: VaultData["services"], groups: string[]): string {
-  return emitGroups(services, groups, (_group, keys) => keysToExports(keys));
+  const found = groups.filter((group) => Object.hasOwn(services, group));
+  refuseUnsafe(found.flatMap((group) => inGroup(group, invalidKeyNames(services[group]!))));
+  return found.map((group) => keysToExports(services[group]!)).join("");
+}
+
+/**
+ * The .env text `keypick extract` writes for `groups`, in the order given:
+ * a `# --- <group> ---` header, the group's KEY=VALUE lines, and a blank line.
+ * Groups the vault doesn't have are skipped.
+ *
+ * Throws one UnsafeVaultContentError naming every group whose name contains a
+ * control character and every unsafe key in every group, so a refusal never
+ * returns partial output.
+ */
+export function groupsToEnv(services: VaultData["services"], groups: string[]): string {
+  const found = groups.filter((group) => Object.hasOwn(services, group));
+  refuseUnsafe(
+    found.flatMap((group) => [
+      ...(hasControlCharacter(group) ? [`group ${quoteName(group)} has a control character in its name`] : []),
+      ...inGroup(group, [...invalidKeyNames(services[group]!), ...multilineValues(services[group]!)]),
+    ]),
+  );
+  return found.map((group) => `# --- ${group} ---\n${keysToEnv(services[group]!)}\n`).join("");
 }
 
 /**
@@ -543,26 +570,17 @@ function invalidKeyNames(keys: Record<string, string>): string[] {
     .map((k) => `key ${quoteName(k)} is not a valid variable name (${VARIABLE_NAME.source})`);
 }
 
-function refuseUnsafe(problems: string[]): void {
-  if (problems.length > 0) throw new UnsafeVaultContentError(problems);
+function multilineValues(keys: Record<string, string>): string[] {
+  return Object.keys(keys)
+    .sort()
+    .filter((k) => /[\r\n]/.test(keys[k]!))
+    .map((k) => `key ${quoteName(k)} has a line break in its value`);
 }
 
-function emitGroups(
-  services: VaultData["services"],
-  groups: string[],
-  emit: (group: string, keys: Record<string, string>) => string,
-): string {
-  const problems: string[] = [];
-  let output = "";
-  for (const group of groups) {
-    if (!Object.hasOwn(services, group)) continue;
-    try {
-      output += emit(group, services[group]!);
-    } catch (e) {
-      if (!(e instanceof UnsafeVaultContentError)) throw e;
-      problems.push(...e.problems.map((p) => `group ${quoteName(group)}: ${p}`));
-    }
-  }
-  refuseUnsafe(problems);
-  return output;
+function inGroup(group: string, problems: string[]): string[] {
+  return problems.map((p) => `group ${quoteName(group)}: ${p}`);
+}
+
+function refuseUnsafe(problems: string[]): void {
+  if (problems.length > 0) throw new UnsafeVaultContentError(problems);
 }

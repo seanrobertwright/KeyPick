@@ -32,15 +32,18 @@ export async function run(): Promise<void> {
     return;
   }
 
-  let envContent = "";
+  let envContent: string;
+  try {
+    envContent = vault.groupsToEnv(data.services, selected);
+  } catch (e) {
+    if (!(e instanceof vault.UnsafeVaultContentError)) throw e;
+    console.error(`${ENV_FILE} not written: these names or values would corrupt it.\n${e.message}`);
+    terminal.cleanupAndExit(1);
+  }
+
   let totalKeys = 0;
   for (const group of selected) {
-    if (!Object.hasOwn(data.services, group)) continue;
-    const keys = data.services[group]!;
-    envContent += `# --- ${group} ---\n`;
-    envContent += vault.keysToEnv(keys);
-    envContent += "\n";
-    totalKeys += Object.keys(keys).length;
+    if (Object.hasOwn(data.services, group)) totalKeys += Object.keys(data.services[group]!).length;
   }
 
   try {
