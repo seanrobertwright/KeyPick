@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `$(…)` collapsed the output onto one line. `auto` now writes only
   `export` lines to stdout. The banner appears only for the no-argument
   interactive menu when stdout is a terminal, so subcommands, `--version`,
-  and `--help` no longer print it.
+  and `--help` no longer print it. The vault picker, which `auto` shows on
+  a first run when several vaults are found, now renders on stderr.
 
 ### Docs
 

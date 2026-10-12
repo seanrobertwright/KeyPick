@@ -8,7 +8,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -19,12 +19,13 @@ const GOOD_VALUE = "good-value";
 const TRICKY_VALUE = "two  spaces   * star $HOME ${PATH} $(id) it's";
 
 let root: string;
+let vaultDir: string;
 let env: NodeJS.ProcessEnv;
 
 type RunResult = { stdout: string; stderr: string; status: number | null };
 
 /** Run a command with stdout piped (not a TTY). Throws only if it can't start. */
-function run(cmd: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): RunResult {
+function run(cmd: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string } = {}): RunResult {
   const result = spawnSync(cmd, args, { ...options, encoding: "utf8" });
   if (result.error) {
     throw new Error(`Could not run \`${cmd}\` (is it on PATH?): ${result.error.message}`);
@@ -61,7 +62,7 @@ beforeAll(() => {
   const publicKey = /^# public key: (\S+)$/m.exec(readFileSync(keyFile, "utf8"))?.[1];
   if (!publicKey) throw new Error(`age-keygen wrote no public key to ${keyFile}`);
 
-  const vaultDir = path.join(root, "vault");
+  vaultDir = path.join(root, "vault");
   mkdirSync(vaultDir);
   writeFileSync(
     path.join(vaultDir, ".sops.yaml"),
@@ -164,5 +165,25 @@ describe("banner", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toStartWith("Usage: keypick ");
+  });
+});
+
+describe("vault picker", () => {
+  test("keypick auto writes only export lines to stdout when it asks which vault to use", () => {
+    // No KEYPICK_VAULT_DIR, no remembered vault, no vault above cwd, and two
+    // vaults under the vault home, so auto has to ask.
+    const home = path.join(root, "picker-home");
+    for (const name of ["first", "second"]) {
+      cpSync(vaultDir, path.join(home, "vaults", name), { recursive: true });
+    }
+    const pickerEnv: NodeJS.ProcessEnv = { ...env, KEYPICK_HOME: home };
+    delete pickerEnv.KEYPICK_VAULT_DIR;
+
+    // Enter picks the first vault.
+    const result = run(process.execPath, [MAIN, "auto", "Test"], { cwd: root, env: pickerEnv, input: "\r" });
+
+    expect(result.stderr).toContain("Select a KeyPick vault");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("export GOOD_KEY='good-value'\n");
   });
 });
