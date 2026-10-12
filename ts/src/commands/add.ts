@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { select, input, confirm } from "@inquirer/prompts";
 import * as vault from "../lib/vault.ts";
 import * as terminal from "../lib/terminal.ts";
+import { groupNameProblem, keyNameProblem } from "../lib/names.ts";
 
 const NEW_GROUP = "[ + New Group ]";
 
@@ -28,6 +29,7 @@ export async function run(): Promise<void> {
     try {
       groupName = await input({
         message: "Service/Group name (e.g. Supabase_Prod, Google_AI):",
+        validate: (name) => groupNameProblem(name) ?? true,
       });
     } catch {
       terminal.cleanupAndExit(0);
@@ -47,7 +49,11 @@ export async function run(): Promise<void> {
   while (true) {
     let key: string;
     try {
-      key = await input({ message: "Key Name  :" });
+      // A blank name finishes; anything else must be a valid variable name.
+      key = await input({
+        message: "Key Name  :",
+        validate: (name) => name.trim() === "" || (keyNameProblem(name) ?? true),
+      });
     } catch {
       terminal.cleanupAndExit(0);
     }
