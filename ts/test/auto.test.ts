@@ -149,6 +149,17 @@ describe("keypick auto", () => {
     expect(result.stderr).not.toContain(TRICKY_VALUE);
   });
 
+  test.each(["constructor", "__proto__", "toString"])(
+    "reports %s as not found instead of reading a built-in object",
+    (group) => {
+      const result = keypick("auto", group);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(`Warning: group '${group}' not found in vault.`);
+    },
+  );
+
   test("with no groups, prints usage to stderr and nothing to stdout", () => {
     const result = keypick("auto");
 

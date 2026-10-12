@@ -16,7 +16,7 @@ export async function run(): Promise<void> {
 
   let totalKeys = 0;
   for (const group of groups) {
-    const keys = data.services[group] ?? {};
+    const keys = Object.hasOwn(data.services, group) ? data.services[group]! : {};
     console.log(`  ${chalk.cyan("◆")} ${chalk.cyan.bold(group)}`);
     for (const key of Object.keys(keys).sort()) {
       console.log(`      ${chalk.dim("·")} ${key}`);

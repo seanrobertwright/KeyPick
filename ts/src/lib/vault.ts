@@ -427,7 +427,7 @@ export async function load(): Promise<VaultData> {
 
   const stdout = result.stdout?.toString("utf8") ?? "";
   const parsed = YAML.parse(stdout);
-  if (!parsed || typeof parsed !== "object" || !("services" in parsed)) {
+  if (!parsed || typeof parsed !== "object" || !Object.hasOwn(parsed, "services")) {
     return emptyVault();
   }
   return parsed as VaultData;
@@ -555,10 +555,9 @@ function emitGroups(
   const problems: string[] = [];
   let output = "";
   for (const group of groups) {
-    const keys = services[group];
-    if (!keys) continue;
+    if (!Object.hasOwn(services, group)) continue;
     try {
-      output += emit(group, keys);
+      output += emit(group, services[group]!);
     } catch (e) {
       if (!(e instanceof UnsafeVaultContentError)) throw e;
       problems.push(...e.problems.map((p) => `group ${quoteName(group)}: ${p}`));

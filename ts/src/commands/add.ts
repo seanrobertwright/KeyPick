@@ -36,8 +36,8 @@ export async function run(): Promise<void> {
     groupName = groupChoice;
   }
 
-  if (!data.services[groupName]) data.services[groupName] = {};
-  const entry = data.services[groupName];
+  if (!Object.hasOwn(data.services, groupName)) data.services[groupName] = {};
+  const entry = data.services[groupName]!;
 
   console.log(
     `\n  ${chalk.dim("Adding keys to group:")} ${chalk.cyan.bold(groupName)}\n  ${chalk.dim("Leave 'Key Name' blank to finish.")}\n`,
@@ -61,7 +61,7 @@ export async function run(): Promise<void> {
       terminal.cleanupAndExit(0);
     }
 
-    const isUpdate = key in entry;
+    const isUpdate = Object.hasOwn(entry, key);
     entry[key] = val;
 
     if (isUpdate) console.log(`  ${chalk.yellow("↺ Updated:")} ${key}`);

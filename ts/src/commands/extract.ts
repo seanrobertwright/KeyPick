@@ -35,8 +35,8 @@ export async function run(): Promise<void> {
   let envContent = "";
   let totalKeys = 0;
   for (const group of selected) {
-    const keys = data.services[group];
-    if (!keys) continue;
+    if (!Object.hasOwn(data.services, group)) continue;
+    const keys = data.services[group]!;
     envContent += `# --- ${group} ---\n`;
     envContent += vault.keysToEnv(keys);
     envContent += "\n";
