@@ -32,8 +32,9 @@ jobs:
         working-directory: ts
         run: bun run src/main.ts --help
 
-      # The integration tests build a real sops/age vault. Versions match
-      # SOPS_VERSION and AGE_VERSION in ts/src/commands/setup/prerequisites.ts.
+      # The integration tests build a real sops/age vault. The step fails if
+      # these versions differ from SOPS_VERSION and AGE_VERSION in
+      # ts/src/commands/setup/prerequisites.ts.
       - name: Install sops and age
         env:
           SOPS_VERSION: 3.9.4
@@ -42,6 +43,16 @@ jobs:
           AGE_SHA256: 2ae71cb3ea761118937a944083f057cfd42f0ef11d197ce72fc2b8780d50c4ef
         run: |
           set -euo pipefail
+
+          prereqs=ts/src/commands/setup/prerequisites.ts
+          for name in SOPS_VERSION AGE_VERSION; do
+            want=$(sed -n "s/^const ${name} = \"\([^\"]*\)\";\$/\1/p" "$prereqs")
+            if [ "$want" != "${!name}" ]; then
+              echo "::error::${name} is ${!name} in ci.yml but '${want}' in ${prereqs}. Update the version and its SHA-256 here."
+              exit 1
+            fi
+          done
+
           bindir="$RUNNER_TEMP/bin"
           mkdir -p "$bindir"
 
