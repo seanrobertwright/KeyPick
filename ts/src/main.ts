@@ -46,10 +46,12 @@ async function requireBio(): Promise<void> {
 
 async function main(): Promise<void> {
   terminal.installPanicHook();
-  printBanner();
 
   // Special case: no args → interactive menu (still needs biometric gate).
   if (process.argv.length <= 2) {
+    // The banner is decoration for a human at a terminal. Subcommands never
+    // print it: `auto` output is eval'd, and `--version`/`--help` get parsed.
+    if (process.stdout.isTTY) printBanner();
     await requireBio();
     return interactive.run();
   }

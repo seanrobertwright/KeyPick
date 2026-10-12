@@ -1,10 +1,13 @@
 // Non-interactive export for shell evaluation (used by direnv).
 //
-// Prints `export KEY='VALUE'` lines to stdout for each group provided.
-// No biometric gate — authentication is handled by the calling shell context.
+// Prints `export KEY='VALUE'` lines to stdout for each group provided, and
+// nothing else: stdout is eval'd, so usage and missing-group warnings go to
+// stderr. No biometric gate — authentication is handled by the calling shell
+// context.
 //
-// Usage in .envrc:
-//   eval $(keypick auto Supabase_Prod Google_AI)
+// Usage in .envrc (quote the substitution so values keep their whitespace
+// and aren't glob-expanded):
+//   eval "$(keypick auto Supabase_Prod Google_AI)"
 
 import * as vault from "../lib/vault.ts";
 import * as terminal from "../lib/terminal.ts";
@@ -20,7 +23,6 @@ export async function run(groups: string[]): Promise<void> {
   for (const group of groups) {
     const keys = data.services[group];
     if (keys) {
-      output += `# ${group}\n`;
       output += vault.keysToExports(keys);
     } else {
       console.error(`Warning: group '${group}' not found in vault.`);
