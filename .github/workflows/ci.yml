@@ -32,6 +32,36 @@ jobs:
         working-directory: ts
         run: bun run src/main.ts --help
 
+      # The integration tests build a real sops/age vault. Versions match
+      # SOPS_VERSION and AGE_VERSION in ts/src/commands/setup/prerequisites.ts.
+      - name: Install sops and age
+        env:
+          SOPS_VERSION: 3.9.4
+          SOPS_SHA256: 5488e32bc471de7982ad895dd054bbab3ab91c417a118426134551e9626e4e85
+          AGE_VERSION: 1.2.0
+          AGE_SHA256: 2ae71cb3ea761118937a944083f057cfd42f0ef11d197ce72fc2b8780d50c4ef
+        run: |
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/bin"
+          mkdir -p "$bindir"
+
+          curl -fsSL -o "$RUNNER_TEMP/sops" \
+            "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+          echo "${SOPS_SHA256}  $RUNNER_TEMP/sops" | sha256sum -c -
+          install -m 0755 "$RUNNER_TEMP/sops" "$bindir/sops"
+
+          curl -fsSL -o "$RUNNER_TEMP/age.tar.gz" \
+            "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz"
+          echo "${AGE_SHA256}  $RUNNER_TEMP/age.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP"
+          install -m 0755 "$RUNNER_TEMP/age/age" "$RUNNER_TEMP/age/age-keygen" "$bindir/"
+
+          echo "$bindir" >> "$GITHUB_PATH"
+
+      - name: Test
+        working-directory: ts
+        run: bun run test
+
   workflow-asset-sync:
     name: Workflow asset sync
     runs-on: ubuntu-latest
