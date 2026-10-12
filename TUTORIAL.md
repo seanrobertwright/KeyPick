@@ -172,6 +172,8 @@ Good group naming examples:
 
 Keep group names stable. Projects and scripts will depend on them.
 
+A new group name uses letters, digits, `_`, `.`, and `-`, and starts with a letter or digit. A key name must be a shell variable name, such as `DB_HOST`: letters, digits, and `_`, not starting with a digit. `keypick add` asks again if a name breaks these rules.
+
 ---
 
 ## 6. Commit and Sync the Vault

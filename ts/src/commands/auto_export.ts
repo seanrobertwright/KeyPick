@@ -2,8 +2,9 @@
 //
 // Prints `export KEY='VALUE'` lines to stdout for each group provided, and
 // nothing else: stdout is eval'd, so usage and missing-group warnings go to
-// stderr. No biometric gate — authentication is handled by the calling shell
-// context.
+// stderr. If any key name in those groups isn't a shell variable name, prints
+// nothing to stdout, names each such key on stderr, and exits 1. No biometric
+// gate — authentication is handled by the calling shell context.
 //
 // Usage in .envrc (quote the substitution so values keep their whitespace
 // and aren't glob-expanded):
