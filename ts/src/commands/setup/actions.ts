@@ -1,8 +1,7 @@
 // Set up GitHub Actions auto re-encryption workflow.
 
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureDir } from "../../lib/fs.ts";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
@@ -99,18 +98,14 @@ async function runInner(verbose: boolean): Promise<void> {
     ]);
   }
   const sp1 = utils.spinner("Generating GitHub Actions age key...");
-  const tmpDir = mkdtempSync(path.join(tmpdir(), "keypick-actions-"));
-  const keyPath = path.join(tmpDir, "actions_key.txt");
-
-  const keygenRes = spawnSync("age-keygen", ["-o", keyPath], { encoding: "utf8" });
-  sp1.stop();
-  if (keygenRes.error) throw new Error(`age-keygen failed: ${keygenRes.error.message}`);
-  if (keygenRes.status !== 0) {
-    throw new Error(`age-keygen failed: ${keygenRes.stderr ?? ""}`);
+  // Generated in memory: the private key goes only to the GitHub secret below.
+  let keyContent: string;
+  let pubkey: string;
+  try {
+    ({ identity: keyContent, publicKey: pubkey } = utils.generateAgeIdentity());
+  } finally {
+    sp1.stop();
   }
-
-  const keyContent = readFileSync(keyPath, "utf8");
-  const pubkey = utils.readPublicKey(keyPath);
   utils.done(`Generated Actions key: ${chalk.cyan(utils.shortKey(pubkey, 24))}...`);
 
   // Step 2: Add pubkey to .sops.yaml

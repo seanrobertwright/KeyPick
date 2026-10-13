@@ -1,8 +1,8 @@
 // Vault: on-disk SOPS-encrypted YAML, in-memory representation, and path resolution.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { ensureDir } from "./fs.ts";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -45,6 +45,8 @@ const SOPS_FILE = ".sops.yaml";
 const APP_DIR = "keypick";
 const VAULTS_DIR = "vaults";
 const ACTIVE_VAULT_FILE = "active_vault.txt";
+// Where earlier versions wrote the decrypted vault, inside the vault folder.
+const LEGACY_PLAINTEXT_FILE = "vault.yaml.tmp";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Debug logging (gated by KEYPICK_DEBUG_VAULT=1)
@@ -447,31 +449,38 @@ export async function load(): Promise<VaultData> {
 export async function save(vault: VaultData): Promise<void> {
   const dir = await vaultDir();
   const vaultFile = path.join(dir, VAULT_FILE);
-  const yamlData = YAML.stringify(vault);
+  removeLegacyPlaintext(dir);
 
-  // Write plaintext to temp file in the vault dir so SOPS picks up .sops.yaml rules
-  const tmpPath = path.join(dir, "vault.yaml.tmp");
-  writeFileSync(tmpPath, yamlData);
-
-  // --filename-override makes SOPS match creation_rules against vault.yaml
-  // instead of vault.yaml.tmp (which won't match a `vault\.yaml$` rule).
-  const result = spawnSync(
-    "sops",
-    [
-      "--encrypt",
-      "--input-type", "yaml",
-      "--output-type", "yaml",
-      "--filename-override", VAULT_FILE,
-      "--output", vaultFile,
-      tmpPath,
-    ],
-    { cwd: dir, encoding: "buffer" },
-  );
-
+  // SOPS 3.9 can't read plaintext from stdin on Windows, so the YAML goes
+  // through a file: in a fresh private directory under the OS temp dir, never
+  // inside the vault's git working tree. cwd stays the vault so SOPS finds
+  // .sops.yaml, and --filename-override makes its creation rules match
+  // vault.yaml rather than the temp file's name.
+  const tmpDir = mkdtempSync(path.join(tmpdir(), "keypick-save-"));
+  const plaintextPath = path.join(tmpDir, VAULT_FILE);
+  let result: ReturnType<typeof spawnSync>;
   try {
-    rmSync(tmpPath, { force: true });
-  } catch {
-    // best-effort
+    writeFileSync(plaintextPath, YAML.stringify(vault), { mode: 0o600 });
+    result = spawnSync(
+      "sops",
+      [
+        "--encrypt",
+        "--input-type", "yaml",
+        "--output-type", "yaml",
+        "--filename-override", VAULT_FILE,
+        "--output", vaultFile,
+        plaintextPath,
+      ],
+      { cwd: dir, encoding: "buffer" },
+    );
+  } finally {
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      console.error(
+        `keypick: could not remove ${tmpDir}, which holds the decrypted vault. Delete it. (${(e as Error).message})`,
+      );
+    }
   }
 
   if (result.error) {
@@ -484,6 +493,29 @@ export async function save(vault: VaultData): Promise<void> {
     console.error(`SOPS encryption failed:\n${stderr}`);
     terminal.cleanupAndExit(1);
   }
+}
+
+/**
+ * Earlier versions wrote the decrypted vault to vault.yaml.tmp inside the vault
+ * folder while SOPS encrypted it, so an interrupted save could leave it there
+ * for `git add` to commit. Delete it, and say whether git history holds it.
+ */
+function removeLegacyPlaintext(dir: string): void {
+  const leftover = path.join(dir, LEGACY_PLAINTEXT_FILE);
+  if (!existsSync(leftover)) return;
+  rmSync(leftover, { force: true });
+
+  const log = spawnSync("git", ["log", "-1", "--format=%h", "--", LEGACY_PLAINTEXT_FILE], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  const commit = log.status === 0 ? (log.stdout ?? "").trim() : "";
+  console.error(
+    `keypick: removed ${LEGACY_PLAINTEXT_FILE} from the vault folder. An interrupted save in an earlier KeyPick version left the decrypted vault in it.` +
+      (commit
+        ? ` Git history holds it (commit ${commit}), so anyone with the vault repo can read the values it held: rotate them.`
+        : ""),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
