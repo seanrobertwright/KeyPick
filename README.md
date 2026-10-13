@@ -142,7 +142,10 @@ graph TB
 2. **age encryption** controls who can decrypt it (each machine has a unique private key)
 3. **Biometric gate** (Windows Hello / Touch ID / polkit) protects every interactive decryption
 
-Secrets are only ever unencrypted in memory during a `keypick` session. They are never written to disk in plaintext (except when you explicitly export a `.env` file).
+Secrets are unencrypted in memory during a `keypick` session. Two things write them to disk in plaintext:
+
+- `keypick extract` and `keypick env pull`, which write the `.env` files you asked for.
+- Saving the vault (`keypick add`). SOPS reads the decrypted vault from a file, so KeyPick writes it to a private temp file (mode 0600, in a new user-only folder in your OS temp directory, never inside the vault repo) and deletes the folder as soon as SOPS finishes. A crash at that moment can leave the folder behind; it is never committed.
 
 ---
 

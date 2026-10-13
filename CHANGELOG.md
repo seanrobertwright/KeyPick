@@ -30,6 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `keypick env push`, `pull`, and `status` refuse a project id that is `.`
   or `..` or contains `/`, `\`, or a control character. A remote ending in
   `/..` used to point them at the vault root.
+- **Saving the vault wrote it decrypted to `vault.yaml.tmp` inside the vault
+  repo** (#5). An interrupted `keypick add` left that file where `git add -A`
+  would commit it. `save` now writes the plaintext SOPS encrypts to a private
+  temp file outside the repo (a new user-only folder in the OS temp
+  directory, file mode 0600) and removes the folder when SOPS finishes or
+  fails. SOPS 3.9 can't read stdin on Windows, so a file is still needed.
+  `save` also deletes a `vault.yaml.tmp` an earlier version left behind and
+  says so on stderr, telling you to rotate the values if git history holds it.
+- **`keypick setup actions` left the GitHub Actions private key in the temp
+  folder.** It wrote `actions_key.txt` to a `keypick-actions-*` folder and
+  never deleted it. That key decrypts the whole vault. The key is now
+  generated in memory and goes only to the GitHub secret. If you have run
+  `keypick setup actions`, delete any `keypick-actions-*` folders in your
+  temp directory.
 
 ### Fixed
 
@@ -62,6 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added tests for the name checks: the issue #4 repro against a real vault,
   unit tests on the `export` and `.env` emitters and the `add` name rules,
   and project-id tests against real git repos, including `keypick env status`.
+- Added `save` tests that watch the vault's git working tree while SOPS
+  encrypts, simulate a crash mid-encryption, and check the private temp file
+  and the leftover cleanup, plus a test for the in-memory age key generator.
 
 ## [0.2.2] — 2026-04-18
 
