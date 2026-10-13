@@ -58,23 +58,13 @@ async function runInner(verbose: boolean): Promise<void> {
     ]);
   }
   const sp1 = utils.spinner("Generating recovery keypair...");
-  const keygenRes = spawnSync("age-keygen", [], { encoding: "utf8" });
-  sp1.stop();
-  if (keygenRes.error) throw new Error(`age-keygen failed: ${keygenRes.error.message}`);
-  if (keygenRes.status !== 0) throw new Error("age-keygen failed");
-
-  const keyMaterial = keygenRes.stdout ?? "";
-  const stderrText = keygenRes.stderr ?? "";
-
-  let pubkey: string | null = null;
-  for (const line of stderrText.split(/\r?\n/)) {
-    const prefix = "Public key: ";
-    if (line.startsWith(prefix)) {
-      pubkey = line.slice(prefix.length).trim();
-      break;
-    }
+  let keyMaterial: string;
+  let pubkey: string;
+  try {
+    ({ identity: keyMaterial, publicKey: pubkey } = utils.generateAgeIdentity());
+  } finally {
+    sp1.stop();
   }
-  if (!pubkey) throw new Error("Could not extract public key from age-keygen output");
 
   utils.done(`Generated recovery key: ${chalk.cyan(utils.shortKey(pubkey, 24))}...`);
 

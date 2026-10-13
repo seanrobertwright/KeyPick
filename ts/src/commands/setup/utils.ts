@@ -135,6 +135,21 @@ export function installDir(): string {
 // Age keys.txt parsing
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Generate an age identity in memory; nothing is written to disk. Returns the
+ * identity file text age-keygen prints (comments and the AGE-SECRET-KEY line)
+ * and its public key.
+ */
+export function generateAgeIdentity(): { identity: string; publicKey: string } {
+  const res = spawnSync("age-keygen", [], { encoding: "utf8" });
+  if (res.error) throw new Error(`age-keygen failed: ${res.error.message}`);
+  if (res.status !== 0) throw new Error(`age-keygen failed: ${res.stderr ?? ""}`);
+  const identity = res.stdout ?? "";
+  const publicKey = /^# public key: (\S+)$/m.exec(identity)?.[1];
+  if (!publicKey) throw new Error("Could not extract public key from age-keygen output");
+  return { identity, publicKey };
+}
+
 export function readPublicKey(keysPath: string): string {
   let content: string;
   try {
