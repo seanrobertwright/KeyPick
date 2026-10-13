@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { hasControlCharacter, quoteName } from "../../lib/names.ts";
 
 /**
  * Derive a project identifier from the given directory.
@@ -10,6 +11,9 @@ import { spawnSync } from "node:child_process";
  * Resolution:
  *   1. Parse `git remote get-url origin` → normalize to `owner__repo`
  *   2. Fall back to directory name if no git remote
+ *
+ * Throws if the id isn't safe as the folder name envs/<id> in the vault,
+ * naming the remote or folder it came from.
  */
 export function deriveProjectId(dir: string): { id: string; usedFallback: boolean } {
   const result = spawnSync("git", ["remote", "get-url", "origin"], {
@@ -19,12 +23,22 @@ export function deriveProjectId(dir: string): { id: string; usedFallback: boolea
   if (!result.error && result.status === 0) {
     const url = (result.stdout ?? "").trim();
     const id = normalizeRemoteUrl(url);
-    if (id) return { id, usedFallback: false };
+    if (id) return { id: checkProjectId(id, 'the URL of git remote "origin"'), usedFallback: false };
   }
 
   const dirName = path.basename(dir);
   if (!dirName) throw new Error("Cannot determine directory name");
-  return { id: dirName, usedFallback: true };
+  return { id: checkProjectId(dirName, `the name of folder ${quoteName(dir)}`), usedFallback: true };
+}
+
+/** Return `id` if it is one safe folder name under envs/, or throw naming `source`. */
+function checkProjectId(id: string, source: string): string {
+  if (id === "." || id === ".." || /[/\\]/.test(id) || hasControlCharacter(id)) {
+    throw new Error(
+      `Project id ${quoteName(id)}, from ${source}, can't be used as a folder under envs/ in the vault. A project id can't be "." or "..", or contain "/", "\\", or a control character.`,
+    );
+  }
+  return id;
 }
 
 /**

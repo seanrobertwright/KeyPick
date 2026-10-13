@@ -608,6 +608,13 @@ keypick add
 
 Secrets are organized into **groups** (e.g., `Supabase_Prod`, `Google_AI`, `Stripe_Test`).
 
+Names follow two rules, and `keypick add` asks again when a name breaks one:
+
+- **Key names** are shell variable names: letters, digits, and `_`, not starting with a digit (`^[A-Za-z_][A-Za-z0-9_]*$`).
+- **New group names** use letters, digits, `_`, `.`, and `-`, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9_.-]*$`). Existing groups keep their names.
+
+`__proto__`, `constructor`, and `prototype` are reserved for both.
+
 **Example session:**
 ```
 ? Select a group:
@@ -632,7 +639,7 @@ Secrets are organized into **groups** (e.g., `Supabase_Prod`, `Google_AI`, `Stri
 ? Add another key to this group? No
 
   Vault updated successfully.
-  Remember to sync: cd ~/.keypick/vaults/my-keys && git add vault.yaml && git commit -m "Add Stripe_Test" && git push
+  Remember to sync: cd ~/.keypick/vaults/my-keys && git add vault.yaml && git commit -m "Update Stripe_Test" && git push
 ```
 
 ---
@@ -667,6 +674,8 @@ SUPABASE_SECRET=service_role_key_abc
 STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxx
 STRIPE_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxx
 ```
+
+Values are written unquoted, so a line break in a value would start a new line in the file. `extract` refuses to write the file, and exits 1, if a selected group has a key name that isn't a shell variable name, a value containing a line break, or a group name containing a control character. See [Vault names that can't be exported](#vault-names-that-cant-be-exported).
 
 ---
 
@@ -731,6 +740,8 @@ eval "$(keypick auto Supabase_Prod Google_AI)"
 ```
 
 Keep the double quotes around `$(…)`. Without them the shell collapses runs of spaces inside values and expands globs such as `*`.
+
+If any key in the requested groups has a name that isn't a shell variable name, `auto` prints nothing to stdout, names each such key on stderr, and exits 1. `eval` of the empty output still succeeds, so a command chained after it with `&&` runs without those keys. See [Vault names that can't be exported](#vault-names-that-cant-be-exported).
 
 **Allow it once:**
 ```bash
@@ -960,6 +971,24 @@ You need to register this machine's key first. The vault is encrypted for specif
 ```bash
 keypick setup  # Choose "Join existing vault"
 ```
+
+### Vault names that can't be exported
+
+```
+Nothing exported: eval could run these key names as shell commands.
+  group "Evil": key "X=1;touch /tmp/marker;Y" is not a valid variable name (^[A-Za-z_][A-Za-z0-9_]*$)
+```
+
+`keypick add` only stores valid names, but a hand-edited `vault.yaml` or another tool can store anything. `auto` and `extract` refuse such a vault rather than write a name that a shell or `.env` parser would misread. The message names each key or group, never a value. KeyPick has no rename command, so fix the names by editing the vault with sops:
+
+```bash
+cd "$(keypick vault current)"
+sops vault.yaml
+```
+
+### Project id can't be used as a folder
+
+`keypick env push`, `pull`, and `status` store a project's files under `envs/<project id>/` in the vault. The id comes from the `origin` remote URL (`https://github.com/owner/repo` gives `owner__repo`) or, without one, from the folder name. These commands exit 1 if the id is `.` or `..`, or contains `/`, `\`, or a control character, because such an id would point outside the project's own folder. Fix the remote URL with `git remote set-url origin <url>`, or rename the folder.
 
 ### Multiple vaults are available
 

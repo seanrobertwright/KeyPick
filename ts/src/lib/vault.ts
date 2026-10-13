@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import YAML from "yaml";
 import { select } from "@inquirer/prompts";
 import * as terminal from "./terminal.ts";
+import { VARIABLE_NAME, hasControlCharacter, isVariableName, quoteName } from "./names.ts";
 
 /**
  * In-memory representation of vault.yaml.
@@ -27,6 +28,16 @@ export type VaultData = {
 
 export function emptyVault(): VaultData {
   return { services: {} };
+}
+
+/**
+ * The keys of group `name`, or undefined if the vault has no such group.
+ * Only own properties count, so `constructor` or `__proto__` is never a group.
+ * A falsy value, such as the null YAML gives a group with nothing under it,
+ * counts as no group.
+ */
+export function groupKeys(services: VaultData["services"], name: string): Record<string, string> | undefined {
+  return Object.hasOwn(services, name) ? services[name] || undefined : undefined;
 }
 
 const VAULT_FILE = "vault.yaml";
@@ -426,7 +437,7 @@ export async function load(): Promise<VaultData> {
 
   const stdout = result.stdout?.toString("utf8") ?? "";
   const parsed = YAML.parse(stdout);
-  if (!parsed || typeof parsed !== "object" || !("services" in parsed)) {
+  if (!parsed || typeof parsed !== "object" || !Object.hasOwn(parsed, "services")) {
     return emptyVault();
   }
   return parsed as VaultData;
@@ -479,11 +490,83 @@ export async function save(vault: VaultData): Promise<void> {
 // Formatting helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** A group the vault has: its name and its keys. */
+export type Group = [name: string, keys: Record<string, string>];
+
+/**
+ * The `export` lines `keypick auto` prints for `groups`, in the order given.
+ *
+ * Throws one UnsafeVaultContentError naming every key name, in every group,
+ * that isn't a valid shell variable name, so a refusal never returns partial
+ * output.
+ */
+export function groupsToExports(groups: Group[]): string {
+  refuseUnsafe(groups.flatMap(([name, keys]) => prefixWithGroup(name, invalidKeyNames(keys))));
+  return groups.map(([, keys]) => keysToExports(keys)).join("");
+}
+
+/**
+ * The .env text `keypick extract` writes for `groups`, in the order given:
+ * a `# --- <group> ---` header, the group's KEY=VALUE lines, and a blank line.
+ *
+ * Throws one UnsafeVaultContentError naming every group whose name contains a
+ * control character, every key name that isn't a valid shell variable name,
+ * and every key whose value contains a line break, so a refusal never returns
+ * partial output. Values are written unquoted, so a line break would start
+ * another variable.
+ */
+export function groupsToEnv(groups: Group[]): string {
+  refuseUnsafe(
+    groups.flatMap(([name, keys]) => [
+      ...(hasControlCharacter(name) ? [`group ${quoteName(name)} has a control character in its name`] : []),
+      ...prefixWithGroup(name, [...invalidKeyNames(keys), ...multilineValues(keys)]),
+    ]),
+  );
+  return groups.map(([name, keys]) => `# --- ${name} ---\n${keysToEnv(keys)}\n`).join("");
+}
+
+/**
+ * Thrown by the emitters when vault content can't be written safely. Each
+ * entry in `problems` names a group or key, JSON-escaped, and never a value.
+ */
+export class UnsafeVaultContentError extends Error {
+  readonly problems: string[];
+
+  constructor(problems: string[]) {
+    super(
+      [
+        ...problems.map((p) => `  ${p}`),
+        "Fix the vault by editing it with sops: run `sops vault.yaml` in the folder `keypick vault current` prints. KeyPick has no rename command.",
+      ].join("\n"),
+    );
+    this.name = "UnsafeVaultContentError";
+    this.problems = problems;
+  }
+}
+
+function invalidKeyNames(keys: Record<string, string>): string[] {
+  return Object.keys(keys)
+    .sort()
+    .filter((k) => !isVariableName(k))
+    .map((k) => `key ${quoteName(k)} is not a valid variable name (${VARIABLE_NAME.source})`);
+}
+
+function multilineValues(keys: Record<string, string>): string[] {
+  return Object.keys(keys)
+    .sort()
+    .filter((k) => /[\r\n]/.test(keys[k]!))
+    .map((k) => `key ${quoteName(k)} has a line break in its value`);
+}
+
+function prefixWithGroup(group: string, problems: string[]): string[] {
+  return problems.map((p) => `group ${quoteName(group)}: ${p}`);
+}
+
 /**
  * Format a group's keys as KEY=VALUE lines suitable for a .env file.
- * Keys are emitted in sorted order.
+ * Keys are emitted in sorted order. Unchecked: groupsToEnv refuses unsafe keys first.
  */
-export function keysToEnv(keys: Record<string, string>): string {
+function keysToEnv(keys: Record<string, string>): string {
   return Object.keys(keys)
     .sort()
     .map((k) => `${k}=${keys[k]}\n`)
@@ -492,11 +575,15 @@ export function keysToEnv(keys: Record<string, string>): string {
 
 /**
  * Format a group's keys as `export KEY='VALUE'` lines suitable for shell eval.
- * Keys are emitted in sorted order.
+ * Keys are emitted in sorted order. Unchecked: groupsToExports refuses unsafe keys first.
  */
-export function keysToExports(keys: Record<string, string>): string {
+function keysToExports(keys: Record<string, string>): string {
   return Object.keys(keys)
     .sort()
     .map((k) => `export ${k}='${keys[k]!.replace(/'/g, "'\\''")}'\n`)
     .join("");
+}
+
+function refuseUnsafe(problems: string[]): void {
+  if (problems.length > 0) throw new UnsafeVaultContentError(problems);
 }

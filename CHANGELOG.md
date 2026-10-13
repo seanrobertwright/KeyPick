@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Key names reached shell `export` lines unchecked** (#4). A key named
+  `X=1;touch /tmp/marker;Y` ran `touch` under `eval "$(keypick auto …)"`.
+  `auto` and `extract` now refuse a vault whose requested keys aren't shell
+  variable names (`^[A-Za-z_][A-Za-z0-9_]*$`): they print nothing to stdout,
+  write no file, name each bad key on stderr without its value, and exit 1.
+  Fix such names by editing the vault with `sops`. A vault whose names are
+  all valid gives the same output as before.
+- `extract` also refuses a value containing a line break, since `.env`
+  values are unquoted and the break would start another variable, and a
+  group name containing a control character, which would break the
+  `# --- <group> ---` header line.
+- `keypick add` asks again for a key name that isn't a shell variable name
+  or a new group name that doesn't match `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, and
+  refuses `__proto__`, `constructor`, and `prototype` as either. Its
+  "Remember to sync" hint names the group in the commit message only when
+  the name passes that rule.
+- Group and key lookups use own properties only, so
+  `keypick auto constructor` reports the group as not found.
+- `keypick env push`, `pull`, and `status` refuse a project id that is `.`
+  or `..` or contains `/`, `\`, or a control character. A remote ending in
+  `/..` used to point them at the vault root.
+
 ### Fixed
 
 - **`eval $(keypick auto …)` set no variables** (#3). The ASCII banner
@@ -25,12 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   values and doesn't glob-expand them.
 - The skill tells agents not to run `keypick auto` bare to debug a failed
   injection, since its stdout is the plaintext `export` lines.
+- `README.md` and `TUTORIAL.md` give the key and group name rules. The README
+  troubleshooting section covers vault names that can't be exported and
+  project ids that can't be used as a folder. The skill explains that a
+  refused `auto` still lets the chained command run, without those keys.
 
 ### Tests
 
 - Added a `bun test` integration suite (`bun run test` in `ts/`) that builds a
   throwaway sops/age vault and evaluates `keypick auto` output through bash.
   CI installs sops and age and runs it.
+- Added tests for the name checks: the issue #4 repro against a real vault,
+  unit tests on the `export` and `.env` emitters and the `add` name rules,
+  and project-id tests against real git repos, including `keypick env status`.
 
 ## [0.2.2] — 2026-04-18
 

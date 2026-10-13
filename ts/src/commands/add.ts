@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { select, input, confirm } from "@inquirer/prompts";
 import * as vault from "../lib/vault.ts";
 import * as terminal from "../lib/terminal.ts";
+import { groupNameProblem, keyNameProblem } from "../lib/names.ts";
 
 const NEW_GROUP = "[ + New Group ]";
 
@@ -28,6 +29,7 @@ export async function run(): Promise<void> {
     try {
       groupName = await input({
         message: "Service/Group name (e.g. Supabase_Prod, Google_AI):",
+        validate: (name) => groupNameProblem(name) ?? true,
       });
     } catch {
       terminal.cleanupAndExit(0);
@@ -36,8 +38,7 @@ export async function run(): Promise<void> {
     groupName = groupChoice;
   }
 
-  if (!data.services[groupName]) data.services[groupName] = {};
-  const entry = data.services[groupName];
+  const entry = vault.groupKeys(data.services, groupName) ?? (data.services[groupName] = {});
 
   console.log(
     `\n  ${chalk.dim("Adding keys to group:")} ${chalk.cyan.bold(groupName)}\n  ${chalk.dim("Leave 'Key Name' blank to finish.")}\n`,
@@ -47,7 +48,11 @@ export async function run(): Promise<void> {
   while (true) {
     let key: string;
     try {
-      key = await input({ message: "Key Name  :" });
+      // A blank name finishes; anything else must be a valid variable name.
+      key = await input({
+        message: "Key Name  :",
+        validate: (name) => name.trim() === "" || (keyNameProblem(name) ?? true),
+      });
     } catch {
       terminal.cleanupAndExit(0);
     }
@@ -61,7 +66,7 @@ export async function run(): Promise<void> {
       terminal.cleanupAndExit(0);
     }
 
-    const isUpdate = key in entry;
+    const isUpdate = Object.hasOwn(entry, key);
     entry[key] = val;
 
     if (isUpdate) console.log(`  ${chalk.yellow("↺ Updated:")} ${key}`);
@@ -80,7 +85,10 @@ export async function run(): Promise<void> {
   await vault.save(data);
   const dir = await vault.vaultDir();
   console.log(chalk.green.bold("  ✓ Vault updated successfully."));
+  // The hint is a command to paste into a shell. An existing group's name
+  // may hold shell syntax, so only names that pass the new-group rule go in.
+  const commitMessage = groupNameProblem(groupName) === null ? `Update ${groupName}` : "Update vault";
   console.log(
-    `\n  ${chalk.dim("Remember to sync:")} cd ${dir} && git add vault.yaml && git commit -m "Update ${groupName}" && git push`,
+    `\n  ${chalk.dim("Remember to sync:")} cd ${dir} && git add vault.yaml && git commit -m "${commitMessage}" && git push`,
   );
 }

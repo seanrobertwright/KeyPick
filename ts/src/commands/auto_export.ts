@@ -2,8 +2,9 @@
 //
 // Prints `export KEY='VALUE'` lines to stdout for each group provided, and
 // nothing else: stdout is eval'd, so usage and missing-group warnings go to
-// stderr. No biometric gate — authentication is handled by the calling shell
-// context.
+// stderr. If any key name in those groups isn't a shell variable name, prints
+// nothing to stdout, names each such key on stderr, and exits 1. No biometric
+// gate — authentication is handled by the calling shell context.
 //
 // Usage in .envrc (quote the substitution so values keep their whitespace
 // and aren't glob-expanded):
@@ -19,14 +20,23 @@ export async function run(groups: string[]): Promise<void> {
   }
 
   const data = await vault.load();
-  let output = "";
+  const found: vault.Group[] = [];
   for (const group of groups) {
-    const keys = data.services[group];
+    const keys = vault.groupKeys(data.services, group);
     if (keys) {
-      output += vault.keysToExports(keys);
+      found.push([group, keys]);
     } else {
       console.error(`Warning: group '${group}' not found in vault.`);
     }
+  }
+
+  let output: string;
+  try {
+    output = vault.groupsToExports(found);
+  } catch (e) {
+    if (!(e instanceof vault.UnsafeVaultContentError)) throw e;
+    console.error(`Nothing exported: eval could run these key names as shell commands.\n${e.message}`);
+    terminal.cleanupAndExit(1);
   }
 
   process.stdout.write(output);

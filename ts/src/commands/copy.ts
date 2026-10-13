@@ -25,7 +25,7 @@ export async function run(): Promise<void> {
     terminal.cleanupAndExit(0);
   }
 
-  const keysMap = data.services[group] ?? {};
+  const keysMap = vault.groupKeys(data.services, group) ?? {};
   const keyNames = Object.keys(keysMap).sort();
 
   let key: string;
@@ -38,7 +38,7 @@ export async function run(): Promise<void> {
     terminal.cleanupAndExit(0);
   }
 
-  const value = keysMap[key];
+  const value = Object.hasOwn(keysMap, key) ? keysMap[key] : undefined;
   if (value === undefined) {
     console.error(chalk.red(`Key '${key}' not found in group '${group}'.`));
     terminal.cleanupAndExit(1);

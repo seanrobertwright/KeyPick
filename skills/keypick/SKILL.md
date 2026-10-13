@@ -35,6 +35,8 @@ eval "$(keypick auto Stripe OpenAI)" && node server.js
 eval "$(keypick auto Stripe)" && echo "STRIPE_API_KEY=${STRIPE_API_KEY:+set}"
 ```
 
+If a requested group holds a key whose name isn't a shell variable name, `auto` prints nothing to stdout, names each such key on stderr (never its value), and exits 1. The `eval` still succeeds and the chained command still runs, without those keys. Tell the user which keys stderr named; they fix them by editing the vault with `sops`, since KeyPick has no rename command.
+
 The `${VAR:+set}` form prints the literal word `set` only when the variable is populated — it never echoes the secret itself. **Never** use `env`, `printenv`, `set`, or `env | grep` to verify injection: those print the plaintext values into your tool output, which means the secret enters the conversation context.
 
 **When you don't know the group name:** ask the user — "Which KeyPick group holds those keys?" — or suggest they run `keypick list` themselves (it requires their fingerprint so you can't run it silently).
@@ -89,7 +91,7 @@ The `eval "$(keypick auto …)" && <command>` idiom is safe *by construction*: `
 - Do **not** `cat`, `Read`, `Grep`, or otherwise ingest `.env`, `.envrc`, `.env.local`, or any file that may contain plaintext secrets — including files produced by `keypick extract`. Treat those files as write-only from the AI's perspective: created for the user's process, never read back.
 - Do **not** run commands that print env vars as part of their own output (e.g., `node -e 'console.log(process.env)'`, debug middleware that dumps config, verbose CI loggers). If a script fails and the error includes env dumps, stop and tell the user rather than pasting the output back.
 - Do **not** use `set -x`, `bash -x`, or other shell trace modes while secrets are in scope — trace output expands `eval` and prints the values.
-- Do **not** run `keypick auto` on its own, outside `eval "$(…)"`, even to debug an injection that didn't work — its stdout *is* the plaintext `export` lines. Rerun the `eval` form and read its stderr instead: missing-group warnings go there and never include values.
+- Do **not** run `keypick auto` on its own, outside `eval "$(…)"`, even to debug an injection that didn't work — its stdout *is* the plaintext `export` lines. Rerun the `eval` form and read its stderr instead: missing-group warnings and refused key names go there and never include values.
 
 **Preferred patterns:**
 
